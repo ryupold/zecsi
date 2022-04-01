@@ -5,9 +5,9 @@ const game = @import("./game.zig");
 const log = @import("./log.zig");
 
 const r = @import("raylib/raylib.zig");
-const ZecsiiAllocator = @import("allocator.zig").ZecsiiAllocator;
+const ZecsiAllocator = @import("allocator.zig").ZecsiAllocator;
 
-var zalloc = ZecsiiAllocator{};
+var zalloc = ZecsiAllocator{};
 
 const updateWindowSizeEveryNthFrame = 30;
 

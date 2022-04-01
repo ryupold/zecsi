@@ -10,7 +10,7 @@ const r = @cImport({
 });
 const game = @import("./game.zig");
 const log = @import("./log.zig");
-const ZecsiiAllocator = @import("allocator.zig").ZecsiiAllocator;
+const ZecsiAllocator = @import("allocator.zig").ZecsiAllocator;
 
 ////special entry point for Emscripten build, called from src/emscripten/entry.c
 export fn emsc_main() callconv(.C) c_int {
@@ -25,7 +25,7 @@ export fn emsc_set_window_size(width: usize, height: usize) callconv(.C) void {
 }
 
 fn safeMain() !c_int {
-    var zalloc = ZecsiiAllocator{};
+    var zalloc = ZecsiAllocator{};
     const allocator = zalloc.allocator();
     try log.infoAlloc(allocator, "starting da game  ...", .{});
 

@@ -2,29 +2,43 @@ const std = @import("std");
 const fs = std.fs;
 const utf8 = @import("src/utf8.zig");
 
-const raylibSrc = "raylib/src/";
-const webOutdir = "zig-out/web/";
+pub fn Zecsi(comptime pathToZecsi: []const u8) std.build.Pkg {
+    return .{
+        .name = "zecsi",
+        .path = std.build.FileSource.relative(pathToZecsi++"/src/main.zig"),
+    };
+}
 
-pub fn build(b: *std.build.Builder) !void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
+pub fn buildWithZecsi(
+    b: *std.build.Builder,
+    /// your app package
+    app: std.build.Pkg,
+    /// usually: "zecsi"
+    comptime pathToZecsi: []const u8,
+    mode: std.builtin.Mode,
+    target: std.zig.CrossTarget,
+) !void {
+    const raylibSrc = pathToZecsi ++ "/raylib/src/";
 
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const mode = b.standardReleaseOptions();
+    switch (target.getOsTag()) {
+        .wasi, .emscripten => {
+            const webOutdir = "zig-out/web/";
+            const appLib = b.addStaticLibrary(app.name, app.path.path);
+            
 
-    switch (target.toTarget().os.tag) {
-        .wasi, .emscripten, .freestanding => {
+            appLib.setTarget(target);
+            appLib.setBuildMode(mode);
+
             std.log.info("building for emscripten\n", .{});
             if (b.sysroot == null) {
                 std.log.err("Please build with 'zig build -Dtarget=wasm32-wasi --sysroot \"$EMSDK/upstream/emscripten\"", .{});
                 @panic("error.SysRootExpected");
             }
-            const lib = b.addStaticLibrary("zecsi", "src/web.zig");
-            lib.addIncludeDir("./raylib/src/");
+
+            // appLib.addPackage(Zecsi);
+            // const lib = b.addStaticLibrary("zecsi", pathToZecsi ++ "/src/web.zig");
+
+            appLib.addIncludeDir(pathToZecsi ++ "/raylib/src/");
 
             const outdir = webOutdir;
 
@@ -42,13 +56,13 @@ pub fn build(b: *std.build.Builder) !void {
             };
 
             const emcc_path = try fs.path.join(b.allocator, &.{ b.sysroot.?, emcc_file });
-            defer b.allocator.free(emcc_path);
+            // defer b.allocator.free(emcc_path);
             const emranlib_path = try fs.path.join(b.allocator, &.{ b.sysroot.?, emranlib_file });
-            defer b.allocator.free(emranlib_path);
+            // defer b.allocator.free(emranlib_path);
             const emar_path = try fs.path.join(b.allocator, &.{ b.sysroot.?, emar_file });
-            defer b.allocator.free(emar_path);
+            // defer b.allocator.free(emar_path);
             const include_path = try fs.path.join(b.allocator, &.{ b.sysroot.?, "cache", "sysroot", "include" });
-            defer b.allocator.free(include_path);
+            // defer b.allocator.free(include_path);
 
             fs.cwd().makePath(outdir) catch {};
 
@@ -89,32 +103,32 @@ pub fn build(b: *std.build.Builder) !void {
 
             //only build raylib if not already there
             _ = fs.cwd().statFile(outdir ++ "libraylib.a") catch {
-                lib.step.dependOn(&emranlib.step);
+                appLib.step.dependOn(&emranlib.step);
             };
 
-            lib.setTarget(target);
-            lib.setBuildMode(mode);
-            lib.defineCMacro("__EMSCRIPTEN__", "1");
+            appLib.defineCMacro("__EMSCRIPTEN__", "1");
             std.log.info("emscripten include path: {s}", .{include_path});
-            lib.addIncludeDir(include_path);
-            lib.addIncludeDir("src/emscripten");
+            appLib.addIncludeDir(include_path);
+            appLib.addIncludeDir(pathToZecsi ++ "/src/emscripten");
 
-            lib.setOutputDir(outdir);
-            lib.install();
+            appLib.setOutputDir(outdir);
+            try appLib.step.make();
+            // appLib.install();
 
             const shell = switch (mode) {
-                .Debug => "src/emscripten/shell.html",
-                else => "src/emscripten/minshell.html",
+                .Debug => pathToZecsi ++ "/src/emscripten/shell.html",
+                else => pathToZecsi ++ "/src/emscripten/minshell.html",
             };
 
             const emcc = b.addSystemCommand(&.{
                 emcc_path,
                 "-o",
                 outdir ++ "game.html",
-                "src/emscripten/entry.c",
-                "src/emscripten/raylib_marshall.c",
-                // outdir ++ "libraylib.a",
-                outdir ++ "libzecsi.a",
+                pathToZecsi ++ "/src/emscripten/entry.c",
+                pathToZecsi ++ "/src/emscripten/raylib_marshall.c",
+                outdir ++ "libraylib.a",
+                // b.fmt(outdir ++ "lib{s}.a", .{appLib.name}),
+                // outdir ++ "libzecsi.a",
                 "-I.",
                 "-I" ++ raylibSrc,
                 "-I" ++ raylibSrc ++ "emscripten/",
@@ -148,48 +162,52 @@ pub fn build(b: *std.build.Builder) !void {
                 "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap",
             });
 
-            emcc.step.dependOn(&lib.step);
+            emcc.step.dependOn(&appLib.step);
 
+            
+            // try emcc.step.make();
             b.getInstallStep().dependOn(&emcc.step);
+            try b.getInstallStep().make();
+            
             //-------------------------------------------------------------------------------------
         },
         else => {
             std.log.info("building for desktop (windows, macos, linux)\n", .{});
-            const exe = b.addStaticLibrary("zecsi", "src/desktop.zig");
-            exe.setTarget(target);
-            exe.setBuildMode(mode);
+            const appLib = b.addExecutable(app.name, app.path.path);
+            appLib.addPackage(Zecsi(pathToZecsi));
 
-            const rayBuild = @import("./raylib/src/build.zig");
+            appLib.setTarget(target);
+            appLib.setBuildMode(mode);
+
+            const rayBuild = @import("raylib/src/build.zig");
             const raylib = rayBuild.addRaylib(b, target);
-            exe.linkLibrary(raylib);
-            exe.addIncludeDir("./raylib/src/");
-            exe.addIncludeDir("./src/emscripten/");
-            exe.addCSourceFile("./src/emscripten/raylib_marshall.c", &.{});
+            appLib.linkLibrary(raylib);
+            appLib.addIncludeDir(raylibSrc);
+            appLib.addIncludeDir(pathToZecsi ++ "/src/emscripten/");
+            appLib.addCSourceFile(pathToZecsi ++ "/src/emscripten/raylib_marshall.c", &.{});
 
             switch (raylib.target.toTarget().os.tag) {
                 //dunno why but macos target needs sometimes 2 tries to build
                 .macos => {
-                    exe.linkFramework("Foundation");
-                    exe.linkFramework("Cocoa");
-                    exe.linkFramework("OpenGL");
-                    exe.linkFramework("CoreAudio");
-                    exe.linkFramework("CoreVideo");
-                    exe.linkFramework("IOKit");
+                    appLib.linkFramework("Foundation");
+                    appLib.linkFramework("Cocoa");
+                    appLib.linkFramework("OpenGL");
+                    appLib.linkFramework("CoreAudio");
+                    appLib.linkFramework("CoreVideo");
+                    appLib.linkFramework("IOKit");
                 },
                 else => {},
             }
 
-            exe.linkLibC();
-            exe.install();
-
-            const run_cmd = exe.run();
-            run_cmd.step.dependOn(b.getInstallStep());
-            if (b.args) |args| {
-                run_cmd.addArgs(args);
-            }
+            appLib.linkLibC();
+            appLib.install();
         },
     }
+}
 
+pub fn build(b: *std.build.Builder) !void {
+    const target = b.standardTargetOptions(.{});
+    const mode = b.standardReleaseOptions();
 
     const exe_tests = b.addTest("src/tests.zig");
     exe_tests.setTarget(target);
@@ -198,7 +216,3 @@ pub fn build(b: *std.build.Builder) !void {
     const test_step = b.step("test", "Run all unit tests");
     test_step.dependOn(&exe_tests.step);
 }
-
-pub const Pkg = struct {
-    
-};

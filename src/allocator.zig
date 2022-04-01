@@ -7,7 +7,7 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 var gpa = if (builtin.os.tag != .emscripten and builtin.os.tag != .wasi and builtin.mode != .ReleaseFast and builtin.mode != .ReleaseSmall) std.heap.GeneralPurposeAllocator(.{}){};
 
-pub const ZecsiiAllocator =
+pub const ZecsiAllocator =
     struct {
     const Self = @This();
     pub fn allocator(_: *Self) Allocator {

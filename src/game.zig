@@ -1,21 +1,24 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const fmt = std.fmt;
 const log = @import("./log.zig");
-const r = @import("./raylib/raylib.zig");
+pub const raylib = @import("./raylib/raylib.zig");
 const _ecs = @import("ecs/ecs.zig");
-const ECS = _ecs.ECS;
+pub const ECS = _ecs.ECS;
 const camera = @import("camera_system.zig");
 
 const Self = @This();
 
-var allocator: Allocator;
+var allocator: Allocator = undefined;
 var arena: std.heap.ArenaAllocator = undefined;
 var windowsInitialized = false;
 var screenWidth: usize = 100;
 var screenHeight: usize = 100;
 var ecsInitialized = false;
 var ecs: *_ecs.ECS = undefined;
+pub fn getECS() *_ecs.ECS {
+    if (!ecsInitialized) @panic("call init first to initialize a game");
+    return ecs;
+}
 
 pub const GameConfig = struct {
     cwd: []const u8,
@@ -25,9 +28,9 @@ pub const GameConfig = struct {
     } = null,
 };
 
-pub fn init(allocator: Allocator, config: GameConfig) !void {
-    if(ecsInitialized) return error.AlreadyStarted;
-    Self.allocator = allocator;
+pub fn init(alloc: Allocator, config: GameConfig) !void {
+    if (ecsInitialized) return error.AlreadyStarted;
+    Self.allocator = alloc;
 
     ecs = try allocator.create(ECS);
     ecs.* = try _ecs.ECS.init(allocator, allocator);
@@ -61,27 +64,27 @@ pub fn setWindowSize(width: usize, height: usize) void {
     }
     if (!windowsInitialized) {
         windowsInitialized = true;
-        r.InitWindow(@intCast(c_int, screenWidth), @intCast(c_int, screenHeight), "raylib with [zig]");
+        raylib.InitWindow(@intCast(c_int, screenWidth), @intCast(c_int, screenHeight), "raylib with [zig]");
     } else {
-        r.SetWindowSize(@intCast(c_int, screenWidth), @intCast(c_int, screenHeight));
+        raylib.SetWindowSize(@intCast(c_int, screenWidth), @intCast(c_int, screenHeight));
     }
 }
 
 pub fn mainLoop() !void {
-    r.BeginDrawing();
-    defer r.EndDrawing();
+    raylib.BeginDrawing();
+    defer raylib.EndDrawing();
 
-    r.ClearBackground(r.DARKGRAY);
-    try ecs.update(r.GetFrameTime());
+    raylib.ClearBackground(raylib.DARKGRAY);
+    try ecs.update(raylib.GetFrameTime());
 
-    r.EndMode2D();
+    raylib.EndMode2D();
 
-    r.DrawFPS(10, 10);
+    raylib.DrawFPS(10, 10);
 }
 
 pub fn deinit() void {
     ecs.deinit();
     arena.deinit();
-    r.CloseWindow();
+    raylib.CloseWindow();
     allocator.destroy(ecs);
 }
