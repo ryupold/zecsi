@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = @import("./log.zig");
-pub const raylib = @import("./raylib/raylib.zig");
+pub const raylib = @import("ray/raylib.zig");
 const _ecs = @import("ecs/ecs.zig");
 pub const ECS = _ecs.ECS;
 const camera = @import("camera_system.zig");
@@ -15,6 +15,8 @@ var screenWidth: usize = 100;
 var screenHeight: usize = 100;
 var ecsInitialized = false;
 var ecs: *_ecs.ECS = undefined;
+
+
 pub fn getECS() *_ecs.ECS {
     if (!ecsInitialized) @panic("call init first to initialize a game");
     return ecs;
@@ -46,13 +48,6 @@ pub fn init(alloc: Allocator, config: GameConfig) !void {
     if (!windowsInitialized) {
         setWindowSize(800, 800);
     }
-
-    _ = try ecs.registerSystem(@import("asset_system.zig").AssetSystem);
-    _ = try ecs.registerSystem(@import("grid_placement_system.zig").GridPlacementSystem);
-    var cameraSystem = try ecs.registerSystem(camera.CameraSystem);
-    cameraSystem.initMouseDrag(camera.CameraMouseDrag{ .button = 2 });
-    cameraSystem.initMouseZoomScroll(camera.CameraScrollZoom{ .factor = 0.1 });
-    cameraSystem.initTouchZoomAndDrag(camera.TwoFingerZoomAndDrag{ .factor = 0.5 });
 }
 
 pub fn setWindowSize(width: usize, height: usize) void {
@@ -76,8 +71,6 @@ pub fn mainLoop() !void {
 
     raylib.ClearBackground(raylib.DARKGRAY);
     try ecs.update(raylib.GetFrameTime());
-
-    raylib.EndMode2D();
 
     raylib.DrawFPS(10, 10);
 }

@@ -2,6 +2,9 @@
 
 small framework with raylib bindings and own ECS.
 
+> This project is in an very early experimental state.
+> See [https://github.com/ryupold/zecsi-example](https://github.com/ryupold/zecsi-example) to see how to use it
+
 ## run locally
 
 ```sh
@@ -37,7 +40,7 @@ The game data needs to be served with a webserver. Just opening the game.html in
 # TODOs
 
 - [x] Build System
-  - [ ] Build static library
+  - [ ] Build as package
   - [x] Windows/Macos
   - [x] WebAssembly
 - [-] Raylib

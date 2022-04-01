@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const log = @import("log.zig");
 const _ecs = @import("ecs/ecs.zig");
-const r = @import("raylib/raylib.zig");
+const r = @import("ray/raylib.zig");
 const ECS = _ecs.ECS;
 const Entity = _ecs.Entity;
 const Component = _ecs.Component;
@@ -140,14 +140,22 @@ pub const CameraSystem = struct {
         }
     }
 
+    /// transform a (x,y) screen coordinates to a world position
     pub fn screenToWorld(self: Self, screenPos: r.Vector2) r.Vector2 {
         const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?.*;
         return r.GetScreenToWorld2D(screenPos, cam);
     }
 
+    /// transform a (x,y) world position to screen coordinates
     pub fn worldToScreen(self: Self, worldPos: r.Vector2) r.Vector2 {
         const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?.*;
         return r.GetWorldToScreen2D(worldPos, cam);
+    }
+
+    /// current camera zoom
+    pub fn zoom(self: Self) f32 {
+        const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?;
+        return cam.zoom;
     }
 
     pub fn after(self: *Self, _: f32) !void {

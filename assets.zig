@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const r = @import("./raylib/raylib.zig");
+const r = @import("ray/raylib.zig");
 const log = @import("log.zig");
 
 pub const TextureAtlas = struct {

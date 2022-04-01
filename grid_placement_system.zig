@@ -1,6 +1,6 @@
 const std = @import("std");
 const ECS = @import("ecs/ecs.zig").ECS;
-const r = @import("./raylib/raylib.zig");
+const r = @import("ray/raylib.zig");
 const log = @import("log.zig");
 const camera = @import("camera_system.zig");
 const CameraSystem = camera.CameraSystem;

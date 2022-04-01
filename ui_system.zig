@@ -1,5 +1,5 @@
 const std = @import("std");
-const r = @import("raylib/raylib.zig");
+const r = @import("ray/raylib.zig");
 const log = @import("log.zig");
 const _ecs = @import("ecs/ecs.zig");
 const ECS = _ecs.ECS;
