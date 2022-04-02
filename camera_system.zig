@@ -24,6 +24,14 @@ pub const CameraScrollZoom = struct {
     factor: f32 = 1,
 };
 
+pub const CameraWASD = struct {
+    speed: f32 = 1,
+    up: i32 = r.KEY_UP,
+    right: i32 = r.KEY_RIGHT,
+    down: i32 = r.KEY_DOWN,
+    left: i32 = r.KEY_LEFT,
+};
+
 pub const TwoFingerZoomAndDrag = struct {
     factor: f32 = 1,
     _oldCameraZoom: ?f32 = null,
@@ -73,6 +81,7 @@ pub const CameraSystem = struct {
         self.applyMouseDrag(cam);
         self.applyZoomByScrollWheel(cam);
         self.applyTouchDragAndZoom(cam);
+        self.applyWASDMovement(cam);
 
         r.BeginMode2D(cam.*);
     }
@@ -81,7 +90,7 @@ pub const CameraSystem = struct {
 
     fn applyMouseDrag(self: *Self, cam: *r.Camera2D) void {
         if (self.ecs.getOnePtr(self.camera, CameraMouseDrag)) |onDrag| {
-            if (r.IsMouseButtonPressed(@intCast(c_int, onDrag.button))) {
+            if (r.IsMouseButtonPressed(onDrag.button)) {
                 const mousePos = r.GetMousePosition(); //self.screenToWorld(r.GetMousePosition());
                 onDrag._dragStart = mousePos;
                 onDrag._oldCameraPos = cam.target;
@@ -140,6 +149,23 @@ pub const CameraSystem = struct {
         }
     }
 
+    fn applyWASDMovement(self: *Self, cam: *r.Camera2D) void {
+        if (self.ecs.getOnePtr(self.camera, CameraWASD)) |wasd| {
+            if (r.IsKeyDown(wasd.up)) {
+                cam.target = cam.target.add(.{ .x = 0, .y = -wasd.speed });
+            }
+            if (r.IsKeyDown(wasd.down)) {
+                cam.target = cam.target.add(.{ .x = 0, .y = wasd.speed });
+            }
+            if (r.IsKeyDown(wasd.left)) {
+                cam.target = cam.target.add(.{ .x = -wasd.speed, .y = 0 });
+            }
+            if (r.IsKeyDown(wasd.right)) {
+                cam.target = cam.target.add(.{ .x = wasd.speed, .y = 0 });
+            }
+        }
+    }
+
     /// transform a (x,y) screen coordinates to a world position
     pub fn screenToWorld(self: Self, screenPos: r.Vector2) r.Vector2 {
         const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?.*;
@@ -161,6 +187,15 @@ pub const CameraSystem = struct {
     pub fn after(self: *Self, _: f32) !void {
         if (self.ecs.getPtr(r.Camera2D, self.camRef)) |_| {
             r.EndMode2D();
+        }
+    }
+
+    pub fn initCameraWASD(self: *Self, wasd: CameraWASD) void {
+        log.debug("init camera wasd {?}", .{wasd});
+        if (self.ecs.getOnePtr(self.camera, CameraWASD)) |camWasd| {
+            camWasd.* = wasd;
+        } else {
+            ignore(self.ecs.add(self.camera, wasd));
         }
     }
 
