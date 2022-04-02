@@ -2,6 +2,7 @@
 /// NOTE: Every bit registers one state (use it with bit masks)
 /// By default all flags are set to 0
 pub const ConfigFlags = enum(c_uint) {
+    FLAG_NONE = 0,
     FLAG_VSYNC_HINT = 0x00000040, // Set to try enabling V-Sync on GPU
     FLAG_FULLSCREEN_MODE = 0x00000002, // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE = 0x00000004, // Set to allow resizable window

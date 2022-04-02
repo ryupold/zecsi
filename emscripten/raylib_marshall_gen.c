@@ -4,67 +4,67 @@
     
 void mInitWindow(int width, int height, const char *title) 
  {
-    return InitWindow(width, height, title);
+    InitWindow(width, height, title);
 }
 
-bool mWindowShouldClose() 
+bool mWindowShouldClose(void) 
  {
     return WindowShouldClose();
 }
 
-void mCloseWindow() 
+void mCloseWindow(void) 
  {
-    return CloseWindow();
+    CloseWindow();
 }
 
 void mSetWindowMinSize(int width, int height) 
  {
-    return SetWindowMinSize(width, height);
+    SetWindowMinSize(width, height);
 }
 
 void mSetWindowSize(int width, int height) 
  {
-    return SetWindowSize(width, height);
+    SetWindowSize(width, height);
 }
 
-int mGetScreenWidth() 
+int mGetScreenWidth(void) 
  {
     return GetScreenWidth();
 }
 
-int mGetScreenHeight() 
+int mGetScreenHeight(void) 
  {
     return GetScreenHeight();
 }
 
-bool mIsCursorOnScreen() 
+bool mIsCursorOnScreen(void) 
  {
     return IsCursorOnScreen();
 }
 
 void mClearBackground(Color *color) 
  {
-    return ClearBackground(*color);
+    ClearBackground(*color);
 }
 
-void mBeginDrawing() 
+void mBeginDrawing(void) 
  {
-    return BeginDrawing();
+    BeginDrawing();
 }
 
-void mEndDrawing() 
+void mEndDrawing(void) 
  {
-    return EndDrawing();
+    EndDrawing();
 }
 
 void mBeginMode2D(Camera2D *camera) 
  {
-    return BeginMode2D(*camera);
+    BeginMode2D(*camera);
 }
 
-void mEndMode2D() 
+void mEndMode2D(void) 
  {
-    return EndMode2D();
+    EndMode2D();
 }
 
 void mGetCameraMatrix2D(Matrix *out, Camera2D *camera) 
@@ -84,27 +84,27 @@ void mGetScreenToWorld2D(Vector2 *out, Vector2 *position, Camera2D *camera)
 
 void mSetTargetFPS(int fps) 
  {
-    return SetTargetFPS(fps);
+    SetTargetFPS(fps);
 }
 
-int mGetFPS() 
+int mGetFPS(void) 
  {
     return GetFPS();
 }
 
-float mGetFrameTime() 
+float mGetFrameTime(void) 
  {
     return GetFrameTime();
 }
 
-double mGetTime() 
+double mGetTime(void) 
  {
     return GetTime();
 }
 
 void mOpenURL(const char *url) 
  {
-    return OpenURL(url);
+    OpenURL(url);
 }
 
 bool mIsKeyPressed(int key) 
@@ -129,15 +129,15 @@ bool mIsKeyUp(int key)
 
 void mSetExitKey(int key) 
  {
-    return SetExitKey(key);
+    SetExitKey(key);
 }
 
-int mGetKeyPressed() 
+int mGetKeyPressed(void) 
  {
     return GetKeyPressed();
 }
 
-int mGetCharPressed() 
+int mGetCharPressed(void) 
  {
     return GetCharPressed();
 }
@@ -174,22 +174,22 @@ void mGetMouseDelta(Vector2 *out)
 
 void mSetMouseOffset(int offsetX, int offsetY) 
  {
-    return SetMouseOffset(offsetX, offsetY);
+    SetMouseOffset(offsetX, offsetY);
 }
 
 void mSetMouseScale(float scaleX, float scaleY) 
  {
-    return SetMouseScale(scaleX, scaleY);
+    SetMouseScale(scaleX, scaleY);
 }
 
-float mGetMouseWheelMove() 
+float mGetMouseWheelMove(void) 
  {
     return GetMouseWheelMove();
 }
 
 void mSetMouseCursor(int cursor) 
  {
-    return SetMouseCursor(cursor);
+    SetMouseCursor(cursor);
 }
 
 void mGetTouchPosition(Vector2 *out, int index) 
@@ -197,19 +197,19 @@ void mGetTouchPosition(Vector2 *out, int index)
     *out = GetTouchPosition(index);
 }
 
-int mGetTouchPointCount() 
+int mGetTouchPointCount(void) 
  {
     return GetTouchPointCount();
 }
 
 void mDrawLineEx(Vector2 *startPos, Vector2 *endPos, float thick, Color *color) 
  {
-    return DrawLineEx(*startPos, *endPos, thick, *color);
+    DrawLineEx(*startPos, *endPos, thick, *color);
 }
 
 void mDrawRectanglePro(Rectangle *rec, Vector2 *origin, float rotation, Color *color) 
  {
-    return DrawRectanglePro(*rec, *origin, rotation, *color);
+    DrawRectanglePro(*rec, *origin, rotation, *color);
 }
 
 void mLoadTexture(Texture2D *out, const char *fileName) 
@@ -219,20 +219,20 @@ void mLoadTexture(Texture2D *out, const char *fileName)
 
 void mUnloadTexture(Texture2D *texture) 
  {
-    return UnloadTexture(*texture);
+    UnloadTexture(*texture);
 }
 
 void mDrawTexturePro(Texture2D *texture, Rectangle *source, Rectangle *dest, Vector2 *origin, float rotation, Color *tint) 
  {
-    return DrawTexturePro(*texture, *source, *dest, *origin, rotation, *tint);
+    DrawTexturePro(*texture, *source, *dest, *origin, rotation, *tint);
 }
 
 void mDrawFPS(int posX, int posY) 
  {
-    return DrawFPS(posX, posY);
+    DrawFPS(posX, posY);
 }
 
 void mDrawText(const char *text, int posX, int posY, int fontSize, Color *color) 
  {
-    return DrawText(text, posX, posY, fontSize, *color);
+    DrawText(text, posX, posY, fontSize, *color);
 }

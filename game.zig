@@ -11,11 +11,11 @@ const Self = @This();
 var allocator: Allocator = undefined;
 var arena: std.heap.ArenaAllocator = undefined;
 var windowsInitialized = false;
-var screenWidth: usize = 100;
-var screenHeight: usize = 100;
+var screenWidth: i32 = 100;
+var screenHeight: i32 = 100;
 var ecsInitialized = false;
 var ecs: *_ecs.ECS = undefined;
-
+var config: GameConfig = undefined;
 
 pub fn getECS() *_ecs.ECS {
     if (!ecsInitialized) @panic("call init first to initialize a game");
@@ -23,14 +23,16 @@ pub fn getECS() *_ecs.ECS {
 }
 
 pub const GameConfig = struct {
+    gameName: []const u8,
     cwd: []const u8,
     initialWindowSize: ?struct {
-        width: usize,
-        height: usize,
+        width: i32,
+        height: i32,
     } = null,
 };
 
-pub fn init(alloc: Allocator, config: GameConfig) !void {
+pub fn init(alloc: Allocator, c: GameConfig) !void {
+    config = c;
     if (ecsInitialized) return error.AlreadyStarted;
     Self.allocator = alloc;
 
@@ -46,22 +48,23 @@ pub fn init(alloc: Allocator, config: GameConfig) !void {
         setWindowSize(size.width, size.height);
     }
     if (!windowsInitialized) {
-        setWindowSize(800, 800);
+        setWindowSize(64, 64);
     }
 }
 
-pub fn setWindowSize(width: usize, height: usize) void {
+pub fn setWindowSize(width: i32, height: i32) void {
     screenWidth = width;
     screenHeight = height;
     if (ecsInitialized) {
         ecs.window.size.x = @intToFloat(f32, width);
         ecs.window.size.y = @intToFloat(f32, height);
     }
+    
     if (!windowsInitialized) {
         windowsInitialized = true;
-        raylib.InitWindow(@intCast(c_int, screenWidth), @intCast(c_int, screenHeight), "raylib with [zig]");
+        raylib.InitWindow(screenWidth, screenHeight, config.gameName);
     } else {
-        raylib.SetWindowSize(@intCast(c_int, screenWidth), @intCast(c_int, screenHeight));
+        raylib.SetWindowSize(screenWidth, screenHeight);
     }
 }
 

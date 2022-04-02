@@ -6,7 +6,7 @@ const t = @import("types.zig");
 const cPtr = t.asCPtr;
 
 pub fn InitWindow(width: i32, height: i32, title: []const u8) void {
-    return r.mInitWindow(
+    r.mInitWindow(
         @intCast(c_int, width),
         @intCast(c_int, height),
         @ptrCast([*c]const u8, title.ptr),
@@ -18,18 +18,18 @@ pub fn WindowShouldClose() bool {
 }
 
 pub fn CloseWindow() void {
-    return r.mCloseWindow();
+    r.mCloseWindow();
 }
 
 pub fn SetWindowMinSize(width: i32, height: i32) void {
-    return r.mSetWindowMinSize(
+    r.mSetWindowMinSize(
         @intCast(c_int, width),
         @intCast(c_int, height),
     );
 }
 
 pub fn SetWindowSize(width: i32, height: i32) void {
-    return r.mSetWindowSize(
+    r.mSetWindowSize(
         @intCast(c_int, width),
         @intCast(c_int, height),
     );
@@ -50,29 +50,29 @@ pub fn IsCursorOnScreen() bool {
 pub fn ClearBackground(color: t.Color) void {
     var _color = color;
 
-    return r.mClearBackground(
+    r.mClearBackground(
         @ptrCast([*c]r.Color, &_color),
     );
 }
 
 pub fn BeginDrawing() void {
-    return r.mBeginDrawing();
+    r.mBeginDrawing();
 }
 
 pub fn EndDrawing() void {
-    return r.mEndDrawing();
+    r.mEndDrawing();
 }
 
 pub fn BeginMode2D(camera: t.Camera2D) void {
     var _camera = camera;
 
-    return r.mBeginMode2D(
+    r.mBeginMode2D(
         @ptrCast([*c]r.Camera2D, &_camera),
     );
 }
 
 pub fn EndMode2D() void {
-    return r.mEndMode2D();
+    r.mEndMode2D();
 }
 
 pub fn GetCameraMatrix2D(camera: t.Camera2D) t.Matrix {
@@ -113,7 +113,7 @@ pub fn GetScreenToWorld2D(position: t.Vector2, camera: t.Camera2D) t.Vector2 {
 }
 
 pub fn SetTargetFPS(fps: i32) void {
-    return r.mSetTargetFPS(
+    r.mSetTargetFPS(
         @intCast(c_int, fps),
     );
 }
@@ -131,7 +131,7 @@ pub fn GetTime() f64 {
 }
 
 pub fn OpenURL(url: []const u8) void {
-    return r.mOpenURL(
+    r.mOpenURL(
         @ptrCast([*c]const u8, url.ptr),
     );
 }
@@ -161,7 +161,7 @@ pub fn IsKeyUp(key: i32) bool {
 }
 
 pub fn SetExitKey(key: i32) void {
-    return r.mSetExitKey(
+    r.mSetExitKey(
         @intCast(c_int, key),
     );
 }
@@ -217,14 +217,14 @@ pub fn GetMouseDelta() t.Vector2 {
 }
 
 pub fn SetMouseOffset(offsetX: i32, offsetY: i32) void {
-    return r.mSetMouseOffset(
+    r.mSetMouseOffset(
         @intCast(c_int, offsetX),
         @intCast(c_int, offsetY),
     );
 }
 
 pub fn SetMouseScale(scaleX: f32, scaleY: f32) void {
-    return r.mSetMouseScale(
+    r.mSetMouseScale(
         scaleX,
         scaleY,
     );
@@ -235,7 +235,7 @@ pub fn GetMouseWheelMove() f32 {
 }
 
 pub fn SetMouseCursor(cursor: i32) void {
-    return r.mSetMouseCursor(
+    r.mSetMouseCursor(
         @intCast(c_int, cursor),
     );
 }
@@ -259,7 +259,7 @@ pub fn DrawLineEx(startPos: t.Vector2, endPos: t.Vector2, thick: f32, color: t.C
     var _endPos = endPos;
     var _color = color;
 
-    return r.mDrawLineEx(
+    r.mDrawLineEx(
         @ptrCast([*c]r.Vector2, &_startPos),
         @ptrCast([*c]r.Vector2, &_endPos),
         thick,
@@ -272,7 +272,7 @@ pub fn DrawRectanglePro(rec: t.Rectangle, origin: t.Vector2, rotation: f32, colo
     var _origin = origin;
     var _color = color;
 
-    return r.mDrawRectanglePro(
+    r.mDrawRectanglePro(
         @ptrCast([*c]r.Rectangle, &_rec),
         @ptrCast([*c]r.Vector2, &_origin),
         rotation,
@@ -293,7 +293,7 @@ pub fn LoadTexture(fileName: []const u8) t.Texture2D {
 pub fn UnloadTexture(texture: t.Texture2D) void {
     var _texture = texture;
 
-    return r.mUnloadTexture(
+    r.mUnloadTexture(
         @ptrCast([*c]r.Texture2D, &_texture),
     );
 }
@@ -305,7 +305,7 @@ pub fn DrawTexturePro(texture: t.Texture2D, source: t.Rectangle, dest: t.Rectang
     var _origin = origin;
     var _tint = tint;
 
-    return r.mDrawTexturePro(
+    r.mDrawTexturePro(
         @ptrCast([*c]r.Texture2D, &_texture),
         @ptrCast([*c]r.Rectangle, &_source),
         @ptrCast([*c]r.Rectangle, &_dest),
@@ -316,7 +316,7 @@ pub fn DrawTexturePro(texture: t.Texture2D, source: t.Rectangle, dest: t.Rectang
 }
 
 pub fn DrawFPS(posX: i32, posY: i32) void {
-    return r.mDrawFPS(
+    r.mDrawFPS(
         @intCast(c_int, posX),
         @intCast(c_int, posY),
     );
@@ -325,7 +325,7 @@ pub fn DrawFPS(posX: i32, posY: i32) void {
 pub fn DrawText(text: []const u8, posX: i32, posY: i32, fontSize: i32, color: t.Color) void {
     var _color = color;
 
-    return r.mDrawText(
+    r.mDrawText(
         @ptrCast([*c]const u8, text.ptr),
         @intCast(c_int, posX),
         @intCast(c_int, posY),

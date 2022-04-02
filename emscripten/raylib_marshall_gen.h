@@ -4,29 +4,29 @@
     
 void mInitWindow(int width, int height, const char *title);
 
-bool mWindowShouldClose();
+bool mWindowShouldClose(void);
 
-void mCloseWindow();
+void mCloseWindow(void);
 
 void mSetWindowMinSize(int width, int height);
 
 void mSetWindowSize(int width, int height);
 
-int mGetScreenWidth();
+int mGetScreenWidth(void);
 
-int mGetScreenHeight();
+int mGetScreenHeight(void);
 
-bool mIsCursorOnScreen();
+bool mIsCursorOnScreen(void);
 
 void mClearBackground(Color *color);
 
-void mBeginDrawing();
+void mBeginDrawing(void);
 
-void mEndDrawing();
+void mEndDrawing(void);
 
 void mBeginMode2D(Camera2D *camera);
 
-void mEndMode2D();
+void mEndMode2D(void);
 
 void mGetCameraMatrix2D(Matrix *out, Camera2D *camera);
 
@@ -36,11 +36,11 @@ void mGetScreenToWorld2D(Vector2 *out, Vector2 *position, Camera2D *camera);
 
 void mSetTargetFPS(int fps);
 
-int mGetFPS();
+int mGetFPS(void);
 
-float mGetFrameTime();
+float mGetFrameTime(void);
 
-double mGetTime();
+double mGetTime(void);
 
 void mOpenURL(const char *url);
 
@@ -54,9 +54,9 @@ bool mIsKeyUp(int key);
 
 void mSetExitKey(int key);
 
-int mGetKeyPressed();
+int mGetKeyPressed(void);
 
-int mGetCharPressed();
+int mGetCharPressed(void);
 
 bool mIsMouseButtonPressed(int button);
 
@@ -74,13 +74,13 @@ void mSetMouseOffset(int offsetX, int offsetY);
 
 void mSetMouseScale(float scaleX, float scaleY);
 
-float mGetMouseWheelMove();
+float mGetMouseWheelMove(void);
 
 void mSetMouseCursor(int cursor);
 
 void mGetTouchPosition(Vector2 *out, int index);
 
-int mGetTouchPointCount();
+int mGetTouchPointCount(void);
 
 void mDrawLineEx(Vector2 *startPos, Vector2 *endPos, float thick, Color *color);
 

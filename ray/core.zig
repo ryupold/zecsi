@@ -8,7 +8,7 @@ const r = @cImport({
 });
 const t = @import("types.zig");
 const cPtr = t.asCPtr;
-
+const log = @import("../log.zig");
 
 //=== Window-related functions ====================================================================
 // Setup init configuration flags
@@ -21,7 +21,10 @@ pub fn LoadFileData(fileName: []const u8) []const u8 {
     var buf: [8096]u8 = undefined;
     var bytesRead: u32 = undefined;
 
-    const result = r.mLoadFileData(std.fmt.bufPrintZ(&buf, "{s}", .{fileName}) catch unreachable, @ptrCast([*c]c_uint, &bytesRead));
+    const result = r.mLoadFileData(std.fmt.bufPrintZ(&buf, "{s}", .{fileName}) catch |err| {
+        log.err("ERROR in LoadFileData: {?}", .{err});
+        unreachable;
+    }, @ptrCast([*c]c_uint, &bytesRead));
 
     return result[0..bytesRead];
 }
@@ -30,7 +33,6 @@ pub fn UnloadFileData(data: []const u8) void {
     var ptr = @intToPtr([*c]u8, @ptrToInt(data.ptr));
     r.mUnloadFileData(ptr);
 }
-
 
 // Persistent storage management
 
