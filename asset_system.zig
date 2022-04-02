@@ -17,22 +17,26 @@ pub const AssetSystem = struct {
         .time = 2,
         .repeat = true,
     },
-    assets: std.StringHashMap(AssetLink),
+    assets: std.StringHashMap(*AssetLink),
 
     pub fn init(ecs: *ECS) !Self {
         var system = Self{
             .ecs = ecs,
-            .assets = std.StringHashMap(AssetLink).init(ecs.allocator),
+            .assets = std.StringHashMap(*AssetLink).init(ecs.allocator),
         };
 
         return system;
     }
 
     pub fn deinit(self: *Self) void {
-        // var vit = self.assets.valueIterator();
-        // while (vit.next()) |link| {
-        //     link.deinit();
-        // }
+        var kit = self.assets.keyIterator();
+        while (kit.next()) |path| {
+            if (self.assets.fetchRemove(path.*)) |kv| {
+                kv.value.deinit();
+                self.ecs.allocator.destroy(kv.value);
+            }
+            kit = self.assets.keyIterator();
+        }
         self.assets.deinit();
     }
 
@@ -41,11 +45,7 @@ pub const AssetSystem = struct {
     }
 
     pub fn loadTexture(self: *Self, path: []const u8) !*AssetLink {
-        try self.assets.put(path, try AssetLink.init(
-            path,
-            .{ .Texture = r.LoadTexture(path) },
-        ));
-        return self.assets.getPtr(path).?;
+        return self.cacheAssetLink(path, .{ .Texture = r.LoadTexture(path) });
     }
 
     pub fn loadTextureAtlas(
@@ -54,19 +54,24 @@ pub const AssetSystem = struct {
         horizontalCells: u32,
         verticalCells: u32,
     ) !*AssetLink {
-        try self.assets.put(path, try AssetLink.init(
-            path,
-            .{ .TextureAtlas = TextureAtlas.load(path, horizontalCells, verticalCells) },
-        ));
-        return self.assets.getPtr(path).?;
+        return self.cacheAssetLink(path, .{
+            .TextureAtlas = TextureAtlas.load(path, horizontalCells, verticalCells),
+        });
     }
 
     pub fn loadJson(self: *Self, path: []const u8) !*AssetLink {
-        try self.assets.put(path, try AssetLink.init(
-            path,
-            .{ .Json = try assets.Json.load(path) },
-        ));
-        return self.assets.getPtr(path).?;
+        return self.cacheAssetLink(path, .{ .Json = try assets.Json.load(path) });
+    }
+
+    fn cacheAssetLink(self: *Self, path: []const u8, asset: assets.Asset) !*AssetLink {
+        if (self.assets.get(path)) |contained| {
+            return contained;
+        }
+
+        const ptr = try self.ecs.allocator.create(AssetLink);
+        ptr.* = try AssetLink.init(path, asset);
+        try self.assets.put(path, ptr);
+        return ptr;
     }
 
     pub fn loadJsonObject(self: *Self, comptime T: type, path: []const u8) !assets.JsonObject(T) {
@@ -84,13 +89,13 @@ pub const AssetSystem = struct {
         if (self.reloadInterval.tick(dt)) {
             var vit = self.assets.valueIterator();
             while (vit.next()) |asset| {
-                const needsReload: bool = asset.check() catch |err| {
-                    try log.errAlloc(self.ecs.allocator, "Error when checking AssetLink [{s}]: {?}", .{ asset.path, err });
+                const needsReload: bool = asset.*.check() catch |err| {
+                    try log.errAlloc(self.ecs.allocator, "Error when checking AssetLink [{s}]: {?}", .{ asset.*.path, err });
                     continue;
                 };
                 if (needsReload) {
-                    std.log.debug("reloading {s}", .{asset.path});
-                    _ = asset.reload() catch |err| try log.errAlloc(self.ecs.allocator, "Error loading AssetLink [{s}]: {?}", .{ asset.path, err });
+                    std.log.debug("reloading {s}", .{asset.*.path});
+                    _ = asset.*.reload() catch |err| try log.errAlloc(self.ecs.allocator, "Error loading AssetLink [{s}]: {?}", .{ asset.*.path, err });
                 }
             }
         }

@@ -6,16 +6,23 @@ pub const Timer = struct {
     time: f32,
 
     pub fn tick(self: *@This(), dt: f32) bool {
-        const before = self.timePassed > self.time;
-        if (!before) {
-            self.timePassed += dt;
-        }
-        const after = self.timePassed > self.time;
+        if(self.time <= 0) return true;
+
+        const before = self.timePassed >= self.time;
+        self.timePassed = std.math.clamp(self.timePassed + dt, 0, self.time);
+        
+        const after = self.timePassed >= self.time;
         if (!before and after) {
             if (self.repeat) self.timePassed = @mod(self.timePassed, self.time);
             return true;
         }
         return false;
+    }
+
+    /// returns a value between 0 - 1
+    /// interpret this as percent until the timer triggers
+    pub fn progress(self: @This()) f32 {
+        return std.math.clamp(self.timePassed / self.time, 0, 1);
     }
 
     pub fn reset(self: *@This()) void {
