@@ -14,7 +14,7 @@ pub const AssetSystem = struct {
     pub const Self = @This();
     ecs: *ECS,
     reloadInterval: utils.Timer = .{
-        .time = 3,
+        .time = 2,
         .repeat = true,
     },
     assets: std.StringHashMap(AssetLink),
@@ -43,7 +43,7 @@ pub const AssetSystem = struct {
     pub fn loadTexture(self: *Self, path: []const u8) !*AssetLink {
         try self.assets.put(path, try AssetLink.init(
             path,
-            .{ .Texture = r.LoadTexture(@ptrCast([*c]const u8, path)) },
+            .{ .Texture = r.LoadTexture(path) },
         ));
         return self.assets.getPtr(path).?;
     }

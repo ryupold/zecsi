@@ -150,7 +150,10 @@ pub const Json = struct {
 
     pub fn as(self: @This(), comptime T: type) !T {
         var stream = std.json.TokenStream.init(self.data);
-        return try std.json.parse(T, &stream, .{});
+        return try std.json.parse(T, &stream, .{
+            .duplicate_field_behavior = .UseLast,
+            .ignore_unknown_fields = true,
+        });
     }
 };
 

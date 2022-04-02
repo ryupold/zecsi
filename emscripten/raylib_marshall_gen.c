@@ -17,6 +17,16 @@ void mCloseWindow(void)
     CloseWindow();
 }
 
+void mSetWindowPosition(int x, int y) 
+ {
+    SetWindowPosition(x, y);
+}
+
+void mSetWindowMonitor(int monitor) 
+ {
+    SetWindowMonitor(monitor);
+}
+
 void mSetWindowMinSize(int width, int height) 
  {
     SetWindowMinSize(width, height);

@@ -7,6 +7,8 @@ const generateBindingsFor = [
   "CloseWindow",
   "GetScreenWidth",
   "GetScreenHeight",
+  "SetWindowMonitor",
+  "SetWindowPosition",
 
   //data
   "OpenURL",

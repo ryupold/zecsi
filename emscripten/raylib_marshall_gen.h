@@ -8,6 +8,10 @@ bool mWindowShouldClose(void);
 
 void mCloseWindow(void);
 
+void mSetWindowPosition(int x, int y);
+
+void mSetWindowMonitor(int monitor);
+
 void mSetWindowMinSize(int width, int height);
 
 void mSetWindowSize(int width, int height);
