@@ -60,7 +60,7 @@ pub const GridPlacementSystem = struct {
     pub fn deinit(_: *@This()) void {}
 
     pub fn update(self: *@This(), dt: f32) !void {
-        if (r.IsKeyReleased(.KEY_G))
+        if (r.IsKeyReleased(r.KEY_G))
             self.isGridVisible = !self.isGridVisible;
 
         self.drawGrid();

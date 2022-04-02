@@ -1,9 +1,14 @@
 # zecsi
 
-small framework with raylib bindings and own ECS.
+small framework with [raylib](https://www.raylib.com/) bindings and own ECS.
 
 > This project is in an very early experimental state.
 > See [https://github.com/ryupold/zecsi-example](https://github.com/ryupold/zecsi-example) to see how to use it
+
+## dependencies
+- git
+- zig
+- emscripten sdk (if you intend to build for webassembly)
 
 ## run locally
 

@@ -15,7 +15,7 @@ pub const CameraFollowingEntity = struct {
 };
 
 pub const CameraMouseDrag = struct {
-    button: u32 = 0,
+    button: i32 = 0,
     _oldCameraPos: ?r.Vector2 = null,
     _dragStart: ?r.Vector2 = null,
 };

@@ -13,3 +13,4 @@ pub usingnamespace @import("textures.zig");
 pub usingnamespace @import("text.zig");
 pub usingnamespace @import("shapes.zig");
 pub usingnamespace @import("gui.zig");
+pub usingnamespace @import("gen.zig");

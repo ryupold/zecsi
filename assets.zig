@@ -19,7 +19,7 @@ pub const TextureAtlas = struct {
         horizontalCells: u32,
         verticalCells: u32,
     ) @This() {
-        return @This().init(r.LoadTexture(@ptrCast([*c]const u8, path)), horizontalCells, verticalCells);
+        return @This().init(r.LoadTexture(path), horizontalCells, verticalCells);
     }
 
     pub fn init(
@@ -228,7 +228,7 @@ pub const AssetLink = struct {
 
         switch (self.asset) {
             .Texture => {
-                self.asset = .{ .Texture = r.LoadTexture(@ptrCast([*c]const u8, self.path)) };
+                self.asset = .{ .Texture = r.LoadTexture(self.path) };
             },
             .TextureAtlas => {
                 const count = self.asset.TextureAtlas.count;
