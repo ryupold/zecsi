@@ -1,22 +1,22 @@
 # zecsi
 
-small framework with [raylib](https://www.raylib.com/) bindings and own ECS.
+small framework with [raylib](https://www.raylib.com/) bindings and own [ECS](https://devlog.hexops.com/2022/lets-build-ecs-part-1).
 
 > This project is in an very early experimental state.
 > See [https://github.com/ryupold/zecsi-example](https://github.com/ryupold/zecsi-example) to see how to use it
 
-## dependencies
+### dependencies
 - git
-- zig
+- [zig (0.9.1)](https://ziglang.org/documentation/0.9.1/)
 - emscripten sdk (if you intend to build for webassembly)
 
-## run locally
+### run locally
 
 ```sh
 zig build run
 ```
 
-## build for host os and architecture
+### build for host os and architecture
 
 ```sh
 zig build -Drelease-small
@@ -24,7 +24,7 @@ zig build -Drelease-small
 
 The output files will be in `./zig-out/bin`
 
-## html5 / emscripten
+### html5 / emscripten
 
 ```sh
 EMSDK=../emsdk #path to emscripten sdk
@@ -42,7 +42,7 @@ The output files will be in `./zig-out/web/`
 The game data needs to be served with a webserver. Just opening the game.html in a browser won't work
 
 
-# TODOs
+## TODOs
 
 - [x] Build System
   - [ ] Build as package
@@ -79,3 +79,11 @@ The game data needs to be served with a webserver. Just opening the game.html in
 - [ ] Menu
 - [ ] Netcode
 - [ ] Window Icon
+
+
+## Helpful links
+- [ziglang.org](https://ziglang.org/)
+- [raylib.com](https://www.raylib.com/)
+- [ziglearn.org](https://ziglearn.org/)
+- [raylib.com/cheatsheet](https://www.raylib.com/cheatsheet/cheatsheet.html)
+- [devlog.hexops.com](https://devlog.hexops.com/2022/lets-build-ecs-part-1)
