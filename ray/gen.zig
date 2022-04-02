@@ -261,6 +261,30 @@ pub fn UnloadTexture (texture: t.Texture2D) void {var _texture = texture;
         @ptrCast([*c]r.Texture2D, &_texture),
     );}
 
+pub fn DrawTextureEx (texture: t.Texture2D, position: t.Vector2, rotation: f32, scale: f32, tint: t.Color) void {var _texture = texture;
+var _position = position;
+var _tint = tint;
+
+    r.mDrawTextureEx(
+        @ptrCast([*c]r.Texture2D, &_texture),
+        @ptrCast([*c]r.Vector2, &_position),
+        rotation,
+        scale,
+        @ptrCast([*c]r.Color, &_tint),
+    );}
+
+pub fn DrawTextureRec (texture: t.Texture2D, source: t.Rectangle, position: t.Vector2, tint: t.Color) void {var _texture = texture;
+var _source = source;
+var _position = position;
+var _tint = tint;
+
+    r.mDrawTextureRec(
+        @ptrCast([*c]r.Texture2D, &_texture),
+        @ptrCast([*c]r.Rectangle, &_source),
+        @ptrCast([*c]r.Vector2, &_position),
+        @ptrCast([*c]r.Color, &_tint),
+    );}
+
 pub fn DrawTexturePro (texture: t.Texture2D, source: t.Rectangle, dest: t.Rectangle, origin: t.Vector2, rotation: f32, tint: t.Color) void {var _texture = texture;
 var _source = source;
 var _dest = dest;

@@ -232,6 +232,16 @@ void mUnloadTexture(Texture2D *texture)
     UnloadTexture(*texture);
 }
 
+void mDrawTextureEx(Texture2D *texture, Vector2 *position, float rotation, float scale, Color *tint) 
+ {
+    DrawTextureEx(*texture, *position, rotation, scale, *tint);
+}
+
+void mDrawTextureRec(Texture2D *texture, Rectangle *source, Vector2 *position, Color *tint) 
+ {
+    DrawTextureRec(*texture, *source, *position, *tint);
+}
+
 void mDrawTexturePro(Texture2D *texture, Rectangle *source, Rectangle *dest, Vector2 *origin, float rotation, Color *tint) 
  {
     DrawTexturePro(*texture, *source, *dest, *origin, rotation, *tint);

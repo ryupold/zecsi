@@ -94,6 +94,10 @@ void mLoadTexture(Texture2D *out, const char *fileName);
 
 void mUnloadTexture(Texture2D *texture);
 
+void mDrawTextureEx(Texture2D *texture, Vector2 *position, float rotation, float scale, Color *tint);
+
+void mDrawTextureRec(Texture2D *texture, Rectangle *source, Vector2 *position, Color *tint);
+
 void mDrawTexturePro(Texture2D *texture, Rectangle *source, Rectangle *dest, Vector2 *origin, float rotation, Color *tint);
 
 void mDrawFPS(int posX, int posY);

@@ -38,7 +38,9 @@ const generateBindingsFor = [
   //textures
   "LoadTexture",
   "UnloadTexture",
+  "DrawTextureEx",
   "DrawTexturePro",
+  "DrawTextureRec",
 
   //text
   "DrawText",

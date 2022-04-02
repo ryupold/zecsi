@@ -203,6 +203,71 @@ pub const Vector4 = extern struct {
     y: f32,
     z: f32,
     w: f32,
+
+    pub fn zero() @This() {
+        return @This(){ .x = 0, .y = 0, .z = 0 };
+    }
+
+    pub fn one() @This() {
+        return @This(){ .x = 1, .y = 1, .z = 1 };
+    }
+
+    pub fn length2(self: @This()) f32 {
+        var sum = self.x * self.x;
+        sum += self.y * self.y;
+        sum += self.z * self.z;
+        sum += self.w * self.w;
+        return sum;
+    }
+
+    pub fn length(self: @This()) f32 {
+        return std.math.sqrt(self.length2());
+    }
+
+    pub fn normalize(self: @This()) @This() {
+        const l = self.length();
+        if (l == 0.0) return @This().zero();
+        return self.scale(1.0 / l);
+    }
+
+    pub fn scale(self: @This(), factor: f32) @This() {
+        return @This(){
+            .x = self.x * factor,
+            .y = self.y * factor,
+            .z = self.z * factor,
+            .w = self.w * factor,
+        };
+    }
+
+    pub fn add(self: @This(), other: @This()) @This() {
+        return @This(){
+            .x = self.x + other.x,
+            .y = self.y + other.y,
+            .z = self.z + other.z,
+            .w = self.w + other.w,
+        };
+    }
+    pub fn sub(self: @This(), other: @This()) @This() {
+        return @This(){
+            .x = self.x - other.x,
+            .y = self.y - other.y,
+            .z = self.z - other.z,
+            .w = self.w - other.w,
+        };
+    }
+
+    pub fn lerp(self: @This(), other: @This(), t: f32) @This() {
+        return self.scale(1 - t).add(other.scale(t));
+    }
+
+    pub fn toColor(self: @This()) Color {
+        return .{
+            .r = @floatToInt(u8, std.math.clamp(self.x * 255, 0, 255)),
+            .g = @floatToInt(u8, std.math.clamp(self.y * 255, 0, 255)),
+            .b = @floatToInt(u8, std.math.clamp(self.z * 255, 0, 255)),
+            .a = @floatToInt(u8, std.math.clamp(self.w * 255, 0, 255)),
+        };
+    }
 };
 
 pub const Quaternion = extern struct {
@@ -327,12 +392,25 @@ pub const Color = extern struct {
         };
     }
 
+    pub fn lerp(self: @This(), other: @This(), t: f32) @This() {
+        return self.toVector4().lerp(other.toVector4(), t).toColor();
+    }
+
     pub fn toRaylib(self: @This()) r.Color {
         return .{
             .r = self.r,
             .g = self.g,
             .b = self.b,
             .a = self.a,
+        };
+    }
+
+    pub fn toVector4(self: @This()) Vector4 {
+        return .{
+            .x = @intToFloat(f32, self.r) / 255.0,
+            .y = @intToFloat(f32, self.g) / 255.0,
+            .z = @intToFloat(f32, self.b) / 255.0,
+            .w = @intToFloat(f32, self.a) / 255.0,
         };
     }
 };
