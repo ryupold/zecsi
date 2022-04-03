@@ -220,7 +220,7 @@ pub const AssetLink = struct {
         }
     }
 
-    /// returns true if the asset file was updated (only in .Debug mode)
+    /// returns true if the asset file was updated
     pub fn hasChanged(self: @This()) bool {
         return self.loadedModTime != self.currentModTime;
     }
@@ -246,7 +246,8 @@ pub const AssetLink = struct {
     }
 
     /// check mod time of the file with 'std.fs.File.stat()'
-    /// update self.currentModTime
+    /// update self.currentModTime 
+    /// (only in .Debug mode)
     pub fn check(self: *@This()) !bool {
         //this makes no sense in webassembly
         if (builtin.os.tag != .wasi and builtin.os.tag != .emscripten) {

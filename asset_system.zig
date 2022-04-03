@@ -37,6 +37,7 @@ pub const AssetSystem = struct {
             }
             kit = self.assets.keyIterator();
         }
+
         self.assets.deinit();
     }
 
