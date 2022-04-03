@@ -248,6 +248,18 @@ var _color = color;
         @ptrCast([*c]r.Color, &_color),
     );}
 
+pub fn DrawTriangle (v1: t.Vector2, v2: t.Vector2, v3: t.Vector2, color: t.Color) void {var _v1 = v1;
+var _v2 = v2;
+var _v3 = v3;
+var _color = color;
+
+    r.mDrawTriangle(
+        @ptrCast([*c]r.Vector2, &_v1),
+        @ptrCast([*c]r.Vector2, &_v2),
+        @ptrCast([*c]r.Vector2, &_v3),
+        @ptrCast([*c]r.Color, &_color),
+    );}
+
 pub fn LoadTexture (fileName: []const u8) t.Texture2D {var _out: t.Texture2D = undefined;
 
     r.mLoadTexture(

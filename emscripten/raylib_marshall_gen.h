@@ -90,6 +90,8 @@ void mDrawLineEx(Vector2 *startPos, Vector2 *endPos, float thick, Color *color);
 
 void mDrawRectanglePro(Rectangle *rec, Vector2 *origin, float rotation, Color *color);
 
+void mDrawTriangle(Vector2 *v1, Vector2 *v2, Vector2 *v3, Color *color);
+
 void mLoadTexture(Texture2D *out, const char *fileName);
 
 void mUnloadTexture(Texture2D *texture);

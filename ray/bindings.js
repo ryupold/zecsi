@@ -34,6 +34,7 @@ const generateBindingsFor = [
   //shapes
   "DrawLineEx",
   "DrawRectanglePro",
+  "DrawTriangle",
 
   //textures
   "LoadTexture",

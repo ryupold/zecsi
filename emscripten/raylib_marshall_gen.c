@@ -222,6 +222,11 @@ void mDrawRectanglePro(Rectangle *rec, Vector2 *origin, float rotation, Color *c
     DrawRectanglePro(*rec, *origin, rotation, *color);
 }
 
+void mDrawTriangle(Vector2 *v1, Vector2 *v2, Vector2 *v3, Color *color) 
+ {
+    DrawTriangle(*v1, *v2, *v3, *color);
+}
+
 void mLoadTexture(Texture2D *out, const char *fileName) 
  {
     *out = LoadTexture(fileName);
