@@ -16,6 +16,10 @@ pub const GridPosition = struct {
     x: i32,
     y: i32,
 
+    pub fn zero() @This() {
+        return .{ .x = 0, .y = 0 };
+    }
+
     /// [0] [1] [2]
     /// [7] [X] [3]
     /// [6] [5] [4]
