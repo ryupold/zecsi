@@ -79,7 +79,26 @@ pub const ECS = struct {
         return self.entities.getPtr(id).?;
     }
 
-    pub fn create(self: *Self, comptime components: anytype) !*Entity {
+    /// when this method results in an bus error at runtime you have to first put the components in const variables
+    /// and then pass them as tuple into this
+    /// 
+    /// instead of this:
+    /// 
+    ///ecs.create(.{StudentTable{
+    ///     .pos = tablePos,
+    ///     .width = tables.tableArea.x,
+    ///     .height = tables.tableArea.y,
+    ///}});
+    /// 
+    /// do this:
+    /// 
+    /// const table = StudentTable{
+    ///     .pos = tablePos,
+    ///     .width = tables.tableArea.x,
+    ///     .height = tables.tableArea.y,
+    ///}
+    /// ecs.create(.{table});
+    pub fn create(self: *Self, components: anytype) !*Entity {
         comptime if (!std.meta.trait.isTuple(@TypeOf(components))) compError("components must be a tuple with value types but was {?}", .{components});
 
         const info: std.builtin.TypeInfo = @typeInfo(@TypeOf(components));
@@ -203,7 +222,7 @@ pub const ECS = struct {
 
     pub fn destroy(self: *Self, entity: anytype) !bool {
         const entityID = self.getID(entity);
-        var e = if (self.getEntity(entityID)) |eid| eid else return error.EntityNotFound;
+        var e = if (self.getEntity(entityID)) |eid| eid else return false;
 
         while (e.components.items.len > 0) {
             const comp: Component = e.components.items[e.components.items.len - 1];

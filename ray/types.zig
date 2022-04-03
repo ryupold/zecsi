@@ -31,6 +31,45 @@ pub const Rectangle = extern struct {
     y: f32,
     width: f32,
     height: f32,
+
+    pub fn toI32(self: @This()) Rectangle {
+        return .{
+            .x = @floatToInt(i32, self.x),
+            .y = @floatToInt(i32, self.y),
+            .width = @floatToInt(i32, self.width),
+            .height = @floatToInt(i32, self.height),
+        };
+    }
+
+    pub fn pos(self: @This()) Vector2 {
+        return .{
+            .x = self.x,
+            .y = self.y,
+        };
+    }
+};
+
+pub const RectangleI = struct {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+
+    pub fn toF32(self: @This()) Rectangle {
+        return .{
+            .x = @intToFloat(f32, self.x),
+            .y = @intToFloat(f32, self.y),
+            .width = @intToFloat(f32, self.width),
+            .height = @intToFloat(f32, self.height),
+        };
+    }
+
+    pub fn pos(self: @This()) Vector2i {
+        return .{
+            .x = self.x,
+            .y = self.y,
+        };
+    }
 };
 
 pub const Vector2 = extern struct {

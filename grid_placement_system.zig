@@ -10,7 +10,7 @@ const AssetSystem = @import("asset_system.zig").AssetSystem;
 const AssetLink = @import("assets.zig").AssetLink;
 const JsonObject = @import("assets.zig").JsonObject;
 
-pub const Vector2 = if (!builtin.is_test) r.Vector2 else struct { x: f32, y: f32 };
+pub const Vector2 = r.Vector2;
 
 pub const GridPosition = struct {
     x: i32,
@@ -150,10 +150,23 @@ pub const GridPlacementSystem = struct {
         };
     }
 
+    /// returns center world pos of the grid cell 
+    /// (same as toWorldPositionEx(pos, .{.x=0.5, .y=0.5}))
     pub fn toWorldPosition(self: *@This(), pos: GridPosition) Vector2 {
+        const cs = self.cellSize();
         return .{
-            .x = @intToFloat(f32, pos.x) * self.cellSize(),
-            .y = @intToFloat(f32, pos.y) * self.cellSize(),
+            .x = @intToFloat(f32, pos.x) * cs,
+            .y = @intToFloat(f32, pos.y) * cs,
+        };
+    }
+
+    /// returns adjusted to an origin (0-1) of cellSize
+    pub fn toWorldPositionEx(self: *@This(), pos: GridPosition, origin: Vector2) Vector2 {
+        const cs = self.cellSize();
+        const o = origin.scale(cs);
+        return .{
+            .x = (@intToFloat(f32, pos.x) * cs - cs / 2) + o.x,
+            .y = (@intToFloat(f32, pos.y) * cs - cs / 2) + o.y,
         };
     }
 };
