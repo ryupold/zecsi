@@ -56,7 +56,7 @@ pub fn debugAlloc(allocator: Allocator, comptime fmt: []const u8, args: anytype)
 }
 
 fn printAlloc(allocator: Allocator, comptime logLevel: LogLevel, comptime fmt: []const u8, args: anytype) !void {
-    const s = try std.fmt.allocPrintZ(allocator, fmt, args);
+    const s = try std.fmt.allocPrintZ(allocator, fmt++"\n", args);
     defer allocator.free(s);
     getPrintFn(logLevel)(s);
 }

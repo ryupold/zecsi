@@ -124,6 +124,7 @@ pub const AnimatedTextureAtlas = struct {
 
 const JsonError = error{ UnexpectedEndOfJson, InvalidJson };
 
+///dont use Json directly. Instead get a 'JsonObject(T)' for easier usage
 pub const Json = struct {
     data: []const u8,
 
@@ -171,9 +172,25 @@ pub fn JsonObject(comptime T: type) type {
             };
         }
 
-        pub fn get(self: *@This()) !T {
+        pub fn initOrDefault(json: *AssetLink, default: T) @This() {
+            const o = json.asset.Json.as(T) catch |err| cDefault:{
+                log.err("cannot load {s}: {?}\nusing default value instead", .{ json.path, err });
+                break :cDefault default;
+            };
+            return @This(){
+                .json = json,
+                .object = o,
+            };
+        }
+
+        pub fn get(self: *@This()) T {
+            if (builtin.mode != .Debug) return self.object; //no asset reloading in release mode
+
             if (self.modTime != self.json.loadedModTime) {
-                self.object = try self.json.asset.Json.as(T);
+                self.object = self.json.asset.Json.as(T) catch |err| {
+                    log.err("cannot load {s}: {?}", .{ self.json.path, err });
+                    return self.object;
+                };
                 self.modTime = self.json.loadedModTime;
             }
             return self.object;
@@ -247,7 +264,6 @@ pub const AssetLink = struct {
 
     /// check mod time of the file with 'std.fs.File.stat()'
     /// update self.currentModTime 
-    /// (only in .Debug mode)
     pub fn check(self: *@This()) !bool {
         //this makes no sense in webassembly
         if (builtin.os.tag != .wasi and builtin.os.tag != .emscripten) {

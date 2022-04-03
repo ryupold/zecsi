@@ -78,7 +78,7 @@ pub fn mainLoop() !void {
 
 pub fn deinit() void {
     ecs.deinit();
-    arena.deinit();
+    // arena.deinit(); //TODO: find out if this is needed
     raylib.CloseWindow();
     allocator.destroy(ecs);
 }

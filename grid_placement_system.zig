@@ -8,6 +8,7 @@ const screenToWorld = camera.screenToWorld;
 const builtin = @import("builtin");
 const AssetSystem = @import("asset_system.zig").AssetSystem;
 const AssetLink = @import("assets.zig").AssetLink;
+const JsonObject = @import("assets.zig").JsonObject;
 
 pub const Vector2 = if (!builtin.is_test) r.Vector2 else struct { x: f32, y: f32 };
 
@@ -50,17 +51,19 @@ const GridConfig = struct {
 
 pub const GridPlacementSystem = struct {
     ecs: *ECS,
-    cellSize: f32 = 64,
     isGridVisible: bool = builtin.mode == .Debug,
     cameraSystem: ?*CameraSystem = null,
-    configLink: *AssetLink,
+    config: JsonObject(GridConfig),
 
     pub fn init(ecs: *ECS) !@This() {
         const ass = ecs.getSystem(AssetSystem).?;
-        const configLink = try ass.loadJson("assets/data/grid_config.json");
+
         return @This(){
             .ecs = ecs,
-            .configLink = configLink,
+            .config = try ass.loadJsonObjectOrDefault(
+                "assets/data/grid_config.json",
+                GridConfig{ .cellSize = 64 },
+            ),
         };
     }
 
@@ -69,11 +72,6 @@ pub const GridPlacementSystem = struct {
     pub fn update(self: *@This(), dt: f32) !void {
         if (r.IsKeyReleased(r.KEY_G)) {
             self.isGridVisible = !self.isGridVisible;
-        }
-
-        if (builtin.mode == .Debug) {
-            const config = self.configLink.asset.Json.as(GridConfig) catch GridConfig{ .cellSize = 64 };
-            self.cellSize = config.cellSize;
         }
 
         self.drawGrid();
@@ -89,19 +87,19 @@ pub const GridPlacementSystem = struct {
             self.cameraSystem = self.ecs.getSystem(CameraSystem);
 
         const min = screenToWorld(.{
-            .x = -self.cellSize * 2,
-            .y = -self.cellSize * 2,
+            .x = -self.cellSize() * 2,
+            .y = -self.cellSize() * 2,
         });
         const max = screenToWorld(.{
-            .x = self.ecs.window.size.x + self.cellSize * 2,
-            .y = self.ecs.window.size.y + self.cellSize * 2,
+            .x = self.ecs.window.size.x + self.cellSize() * 2,
+            .y = self.ecs.window.size.y + self.cellSize() * 2,
         });
         const scale = 1 / camera.zoom();
-        const halfCell: f32 = self.cellSize / 2;
+        const halfCell: f32 = self.cellSize() / 2;
 
         //vertical lines
         var x: f32 = min.x;
-        while (x <= max.x) : (x += self.cellSize) {
+        while (x <= max.x) : (x += self.cellSize()) {
             const from = self.toWorldPosition(self.toGridPosition(Vector2{ .x = x, .y = min.y }))
                 .add(.{ .x = halfCell, .y = 0 });
             const to = self.toWorldPosition(self.toGridPosition(Vector2{ .x = x, .y = max.y }))
@@ -116,7 +114,7 @@ pub const GridPlacementSystem = struct {
 
         //horizontal lines
         var y: f32 = min.y;
-        while (y <= max.y) : (y += self.cellSize) {
+        while (y <= max.y) : (y += self.cellSize()) {
             const from = self.toWorldPosition(self.toGridPosition(Vector2{ .x = min.x, .y = y + halfCell }))
                 .add(.{ .x = 0, .y = halfCell });
             const to = self.toWorldPosition(self.toGridPosition(Vector2{ .x = max.x, .y = y + halfCell }))
@@ -130,28 +128,32 @@ pub const GridPlacementSystem = struct {
         }
     }
 
-    pub fn toGridLen(self: @This(), l: f32) i32 {
+    pub fn cellSize(self: *@This()) f32 {
+        return self.config.get().cellSize;
+    }
+
+    pub fn toGridLen(self: *@This(), l: f32) i32 {
         const rounder: f32 = if (l < 0) -0.5 else 0.5;
-        return @floatToInt(i32, l / self.cellSize + rounder);
+        return @floatToInt(i32, l / self.cellSize() + rounder);
     }
 
-    pub fn toWorldLen(self: @This(), l: i32) f32 {
-        return @intToFloat(f32, l) * self.cellSize;
+    pub fn toWorldLen(self: *@This(), l: i32) f32 {
+        return @intToFloat(f32, l) * self.cellSize();
     }
 
-    pub fn toGridPosition(self: @This(), pos: Vector2) GridPosition {
+    pub fn toGridPosition(self: *@This(), pos: Vector2) GridPosition {
         const xRounder: f32 = if (pos.x < 0) -0.5 else 0.5;
         const yRounder: f32 = if (pos.y < 0) -0.5 else 0.5;
         return .{
-            .x = @floatToInt(i32, pos.x / self.cellSize + xRounder),
-            .y = @floatToInt(i32, pos.y / self.cellSize + yRounder),
+            .x = @floatToInt(i32, pos.x / self.cellSize() + xRounder),
+            .y = @floatToInt(i32, pos.y / self.cellSize() + yRounder),
         };
     }
 
-    pub fn toWorldPosition(self: @This(), pos: GridPosition) Vector2 {
+    pub fn toWorldPosition(self: *@This(), pos: GridPosition) Vector2 {
         return .{
-            .x = @intToFloat(f32, pos.x) * self.cellSize,
-            .y = @intToFloat(f32, pos.y) * self.cellSize,
+            .x = @intToFloat(f32, pos.x) * self.cellSize(),
+            .y = @intToFloat(f32, pos.y) * self.cellSize(),
         };
     }
 };
