@@ -38,6 +38,34 @@ pub const GridPosition = struct {
         };
     }
 
+    /// --- [0] ---
+    /// [3] [X] [1]
+    /// --- [2] ---
+    pub fn crossNeigbours(self: @This()) [4]GridPosition {
+        const x = self.x;
+        const y = self.y;
+        return [_]GridPosition{
+            .{ .x = x, .y = y - 1 },
+            .{ .x = x + 1, .y = y },
+            .{ .x = x, .y = y + 1 },
+            .{ .x = x - 1, .y = y },
+        };
+    }
+
+    /// [0] --- [1]
+    /// --- [X] ---
+    /// [3] --- [2]
+    pub fn diagonalNeigbours(self: @This()) [4]GridPosition {
+        const x = self.x;
+        const y = self.y;
+        return [_]GridPosition{
+            .{ .x = x - 1, .y = y - 1 },
+            .{ .x = x + 1, .y = y - 1 },
+            .{ .x = x + 1, .y = y + 1 },
+            .{ .x = x - 1, .y = y + 1 },
+        };
+    }
+
     pub fn add(self: @This(), other: @This()) @This() {
         return .{ .x = self.x + other.x, .y = self.y + other.y };
     }
