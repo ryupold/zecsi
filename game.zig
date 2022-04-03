@@ -74,8 +74,6 @@ pub fn mainLoop() !void {
 
     raylib.ClearBackground(raylib.DARKGRAY);
     try ecs.update(raylib.GetFrameTime());
-
-    raylib.DrawFPS(10, 10);
 }
 
 pub fn deinit() void {
