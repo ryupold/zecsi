@@ -6,11 +6,15 @@ pub const Timer = struct {
     time: f32,
 
     pub fn tick(self: *@This(), dt: f32) bool {
-        if(self.time <= 0) return true;
+        if (self.time <= 0) return true;
 
         const before = self.timePassed >= self.time;
-        self.timePassed = std.math.clamp(self.timePassed + dt, 0, self.time);
-        
+        if (self.repeat) {
+            self.timePassed += dt;
+        } else {
+            self.timePassed = std.math.clamp(self.timePassed + dt, 0, self.time);
+        }
+
         const after = self.timePassed >= self.time;
         if (!before and after) {
             if (self.repeat) self.timePassed = @mod(self.timePassed, self.time);
