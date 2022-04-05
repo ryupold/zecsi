@@ -41,6 +41,14 @@ The output files will be in `./zig-out/web/`
 
 The game data needs to be served with a webserver. Just opening the game.html in a browser won't work
 
+## raylib bindings
+To generate new bindings you need to add them to `ray/bindings.js`
+then run:
+```sh
+node bindings.js
+```
+The resulting function will be in `ray/gen.zig`
+
 
 ## TODOs
 

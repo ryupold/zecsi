@@ -261,3 +261,28 @@ void mDrawText(const char *text, int posX, int posY, int fontSize, Color *color)
  {
     DrawText(text, posX, posY, fontSize, *color);
 }
+
+void mMatrixIdentity(Matrix *out) 
+ {
+    *out = MatrixIdentity();
+}
+
+void mMatrixMultiply(Matrix *out, Matrix *left, Matrix *right) 
+ {
+    *out = MatrixMultiply(*left, *right);
+}
+
+void mQuaternionFromMatrix(Quaternion *out, Matrix *mat) 
+ {
+    *out = QuaternionFromMatrix(*mat);
+}
+
+void mQuaternionFromAxisAngle(Quaternion *out, Vector3 *axis, float angle) 
+ {
+    *out = QuaternionFromAxisAngle(*axis, angle);
+}
+
+void mQuaternionToAxisAngle(Quaternion *q, Vector3 *outAxis, float *outAngle) 
+ {
+    QuaternionToAxisAngle(*q, outAxis, outAngle);
+}

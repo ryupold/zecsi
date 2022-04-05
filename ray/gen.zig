@@ -327,3 +327,45 @@ pub fn DrawText (text: []const u8, posX: i32, posY: i32, fontSize: i32, color: t
         @intCast(c_int, fontSize),
         @ptrCast([*c]r.Color, &_color),
     );}
+
+pub fn MatrixIdentity () t.Matrix {var _out: t.Matrix = undefined;
+
+    r.mMatrixIdentity(
+        @ptrCast([*c]r.Matrix, &_out),
+    );    return _out;}
+
+pub fn MatrixMultiply (left: t.Matrix, right: t.Matrix) t.Matrix {var _left = left;
+var _right = right;
+var _out: t.Matrix = undefined;
+
+    r.mMatrixMultiply(
+        @ptrCast([*c]r.Matrix, &_out),
+        @ptrCast([*c]r.Matrix, &_left),
+        @ptrCast([*c]r.Matrix, &_right),
+    );    return _out;}
+
+pub fn QuaternionFromMatrix (mat: t.Matrix) t.Quaternion {var _mat = mat;
+var _out: t.Quaternion = undefined;
+
+    r.mQuaternionFromMatrix(
+        @ptrCast([*c]r.Quaternion, &_out),
+        @ptrCast([*c]r.Matrix, &_mat),
+    );    return _out;}
+
+pub fn QuaternionFromAxisAngle (axis: t.Vector3, angle: f32) t.Quaternion {var _axis = axis;
+var _out: t.Quaternion = undefined;
+
+    r.mQuaternionFromAxisAngle(
+        @ptrCast([*c]r.Quaternion, &_out),
+        @ptrCast([*c]r.Vector3, &_axis),
+        angle,
+    );    return _out;}
+
+pub fn QuaternionToAxisAngle (q: t.Quaternion, outAxis: *t.Vector3, outAngle: *f32) void {var _q = q;
+var _outAxis = outAxis;
+
+    r.mQuaternionToAxisAngle(
+        @ptrCast([*c]r.Quaternion, &_q),
+        @ptrCast([*c]r.Vector3, _outAxis),
+        outAngle,
+    );}

@@ -84,7 +84,11 @@ const generateBindingsFor = [
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 const fs = require("fs");
-const inputFiles = [`../raylib/src/raylib.h`, `../raylib/src/extras/raygui.h`];
+const inputFiles = [
+  `../raylib/src/raylib.h`,
+  `../raylib/src/raymath.h`,
+  `../raylib/src/extras/raygui.h`,
+];
 const outputFile = {
   zig: "./gen.zig",
   h: "../emscripten/raylib_marshall_gen.h",
@@ -95,14 +99,24 @@ const inputCode = inputFiles
   .join("\n");
 
 const nameAndReturnRx =
-  /^(?:RAYGUIAPI|RLAPI)\s+(\w+)\s+(\w+)\s*\(([A-Za-z-0-9*, ]*)\)\s*;/gm;
+  /^(?:RAYGUIAPI|RLAPI|RMAPI)\s+(\w+)\s+(\w+)\s*\(([A-Za-z-0-9*, ]*)\)\s*/gm;
 const nameAndReturnLineRx =
-  /^(?:RAYGUIAPI|RLAPI)\s+(\w+)\s+(\w+)\s*\(([A-Za-z-0-9*, ]*)\)\s*;/m;
+  /^(?:RAYGUIAPI|RLAPI|RMAPI)\s+(\w+)\s+(\w+)\s*\(([A-Za-z-0-9*, ]*)\)\s*/m;
 const parameterRxAll =
   /(?:((?:(?:const )?(?:unsigned )?)?\w+)\s+(\*?)\s*(\w+)(,|$))/g;
 const parameterRx =
   /(?:((?:(?:const )?(?:unsigned )?)?\w+)\s+(\*?)\s*(\w+)(,|$))/;
 const noParametersRx = /void/;
+
+function struct(name) {
+  return {
+    t: `${name}`,
+    p: false,
+    z: `t.${name}`,
+    s: true,
+    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
+  };
+}
 
 /**
  * t: type in c function
@@ -121,57 +135,27 @@ const argMap = [
   },
   { t: "bool", p: false, z: "bool", n: (a) => `${a.n}` },
   { t: "float", p: false, z: "f32", n: (a) => `${a.n}` },
+  { t: "float", p: true, z: "*f32", n: (a) => `${a.n}` },
   { t: "double", p: false, z: "f64", n: (a) => `${a.n}` },
   { t: "int", p: false, z: "i32", n: (a) => `@intCast(c_int, ${a.n})` },
+
+  struct("Vector2"),
+  struct("Vector3"),
   {
-    t: "Font",
-    p: false,
-    z: "t.Font",
+    t: `Vector3`,
+    p: true,
+    z: `*t.Vector3`,
     s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
+    n: (a) => `@ptrCast([*c]r.${a.t}, _${a.n})`,
   },
-  {
-    t: "Rectangle",
-    p: false,
-    z: "t.Rectangle",
-    s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
-  },
-  {
-    t: "Camera2D",
-    p: false,
-    z: "t.Camera2D",
-    s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
-  },
-  {
-    t: "Vector2",
-    p: false,
-    z: "t.Vector2",
-    s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
-  },
-  {
-    t: "Color",
-    p: false,
-    z: "t.Color",
-    s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
-  },
-  {
-    t: "Matrix",
-    p: false,
-    z: "t.Matrix",
-    s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
-  },
-  {
-    t: "Texture2D",
-    p: false,
-    z: "t.Texture2D",
-    s: true,
-    n: (a) => `@ptrCast([*c]r.${a.t}, &_${a.n})`,
-  },
+  struct("Vector4"),
+  struct("Color"),
+  struct("Quaternion"),
+  struct("Matrix"),
+  struct("Camera2D"),
+  struct("Rectangle"),
+  struct("Texture2D"),
+  struct("Font"),
 ];
 
 /**
@@ -207,9 +191,9 @@ function mapFunction(m) {
   const args = hasNoParameters
     ? null
     : mParams.map((arg) => {
-        const pm = arg.match(parameterRx);
-        return { t: pm[1], p: pm[2] === "*", n: pm[3] };
-      });
+      const pm = arg.match(parameterRx);
+      return { t: pm[1], p: pm[2] === "*", n: pm[3] };
+    });
   const mappedArgs = hasNoParameters ? [] : args.map(getMapping);
   const mappedReturn = getMapping({ t: returnType, p: false, n: "out" });
   const zigSignature = `pub fn ${functionName} (${mappedArgs
@@ -270,33 +254,45 @@ function mapFunction(m) {
   else if (mappedReturn.t === "void") cBody += `    ${functionName}(`;
   else cBody += `    return ${functionName}(`;
 
-  cBody += `${mappedArgs.map((a) => `${a.s ? "*" : ""}${a.name}`).join(", ")}`;
+  cBody += `${mappedArgs.map((a) => `${a.s && !a.p ? "*" : ""}${a.name}`).join(", ")}`;
   cBody += `);\n`;
   cBody += `}`;
 
   //-----------------------------
 
   return {
+    key: generateBindingsFor[generateBindingsFor.indexOf(functionName)],
     zig: `${zigSignature} ${zigBody}`,
     h: `${cSignature};`,
     c: `${cSignature} \n ${cBody}`,
   };
 }
 
+let generatedCodeFor = [];
 let generatedZig = [];
 let generatedH = [];
 let generatedC = [];
 for (let functionCall of inputCode.match(nameAndReturnRx)) {
   const out = mapFunction(functionCall.match(nameAndReturnLineRx));
   if (out) {
+    generatedCodeFor.push(out.key);
     generatedZig.push(out.zig);
     generatedH.push(out.h);
     generatedC.push(out.c);
+  } else {
+    const m = functionCall.match(nameAndReturnLineRx);
+    const returnType = m[1];
+    const functionName = m[2];
+    const parameters = m[3];
+    if (generateBindingsFor.includes(functionName)) {
+      console.log(`could not generate bindings for '${functionCall}'`);
+    }
   }
 }
 
-if (generateBindingsFor.length !== generatedZig.length) {
-  console.log('not all functions of "generateBindingsFor" were generated');
+if (generateBindingsFor.length !== generatedCodeFor.length) {
+  const notGenerated = generateBindingsFor.filter(b => !generatedCodeFor.find(g => g === b));
+  console.log(`some functions in "generateBindingsFor" had no corresponding C code:\n${notGenerated.join(', ')}`);
 }
 
 //=== Write Zig =================================

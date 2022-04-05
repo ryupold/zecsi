@@ -105,3 +105,13 @@ void mDrawTexturePro(Texture2D *texture, Rectangle *source, Rectangle *dest, Vec
 void mDrawFPS(int posX, int posY);
 
 void mDrawText(const char *text, int posX, int posY, int fontSize, Color *color);
+
+void mMatrixIdentity(Matrix *out);
+
+void mMatrixMultiply(Matrix *out, Matrix *left, Matrix *right);
+
+void mQuaternionFromMatrix(Quaternion *out, Matrix *mat);
+
+void mQuaternionFromAxisAngle(Quaternion *out, Vector3 *axis, float angle);
+
+void mQuaternionToAxisAngle(Quaternion *q, Vector3 *outAxis, float *outAngle);

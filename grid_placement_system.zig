@@ -89,13 +89,9 @@ pub const GridPlacementSystem = struct {
 
     pub fn init(ecs: *ECS) !@This() {
         const ass = ecs.getSystem(AssetSystem).?;
-
         return @This(){
             .ecs = ecs,
-            .config = try ass.loadJsonObjectOrDefault(
-                "assets/data/grid_config.json",
-                GridConfig{ .cellSize = 64 },
-            ),
+            .config = ass.loadJsonObjectOrDefault("assets/data/grid_config.json", GridConfig{ .cellSize = 64 }),
         };
     }
 

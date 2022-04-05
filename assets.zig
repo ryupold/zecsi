@@ -122,7 +122,7 @@ pub const AnimatedTextureAtlas = struct {
     }
 };
 
-const JsonError = error{ UnexpectedEndOfJson, InvalidJson };
+const JsonError = error{ FileNotFound, UnexpectedEndOfJson, InvalidJson };
 
 ///dont use Json directly. Instead get a 'JsonObject(T)' for easier usage
 pub const Json = struct {
@@ -131,7 +131,7 @@ pub const Json = struct {
     /// loads and validates a json string from file
     /// use 'deinit' to unload the data (reload does that automatically)
     pub fn load(path: []const u8) JsonError!@This() {
-        const data = r.LoadFileData(path);
+        const data = try r.LoadFileData(path);
         if (data.len == 0) return error.UnexpectedEndOfJson;
 
         if (!std.json.validate(data)) return error.InvalidJson;
@@ -162,6 +162,7 @@ pub fn JsonObject(comptime T: type) type {
     return struct {
         object: T = undefined,
         json: *AssetLink,
+        static: bool = false,
         modTime: i128 = 0,
 
         pub fn init(json: *AssetLink) !@This() {
@@ -173,7 +174,7 @@ pub fn JsonObject(comptime T: type) type {
         }
 
         pub fn initOrDefault(json: *AssetLink, default: T) @This() {
-            const o = json.asset.Json.as(T) catch |err| cDefault:{
+            const o = json.asset.Json.as(T) catch |err| cDefault: {
                 log.err("cannot load {s}: {?}\nusing default value instead", .{ json.path, err });
                 break :cDefault default;
             };
@@ -183,8 +184,16 @@ pub fn JsonObject(comptime T: type) type {
             };
         }
 
+        pub fn initStatic(default: T) @This() {
+            return @This(){
+                .object = default,
+                .static = true,
+                .json = undefined,
+            };
+        }
+
         pub fn get(self: *@This()) T {
-            if (builtin.mode != .Debug) return self.object; //no asset reloading in release mode
+            if (builtin.mode != .Debug or self.static) return self.object; //no asset reloading in release mode
 
             if (self.modTime != self.json.loadedModTime) {
                 self.object = self.json.asset.Json.as(T) catch |err| {

@@ -79,9 +79,12 @@ pub const AssetSystem = struct {
         return try assets.JsonObject(T).init(try self.loadJson(path));
     }
 
-    pub fn loadJsonObjectOrDefault(self: *Self, path: []const u8, default: anytype) !assets.JsonObject(@TypeOf(default)) {
+    pub fn loadJsonObjectOrDefault(self: *Self, path: []const u8, default: anytype) assets.JsonObject(@TypeOf(default)) {
         const T = @TypeOf(default);
-        return assets.JsonObject(T).initOrDefault(try self.loadJson(path), default);
+        const json = self.loadJson(path) catch {
+            return assets.JsonObject(T).initStatic(default);
+        };
+        return assets.JsonObject(T).initOrDefault(json, default);
     }
 
     pub fn unload(self: *Self, asset: *AssetLink) void {

@@ -2,11 +2,11 @@ const std = @import("std");
 const utils = @import("../utils.zig");
 const randomF32 = utils.randomF32;
 const assert = std.debug.assert;
-const m = @import("math.zig");
 const r = @cImport({
     @cInclude("raylib_marshall.h");
 });
-pub usingnamespace @import("enums.zig");
+
+const g = @import("gen.zig");
 
 pub fn asCPtr(comptime T: type, ptr: anytype) [*c]T {
     return @ptrCast([*c]T, ptr);
@@ -316,7 +316,7 @@ pub const Quaternion = extern struct {
     w: f32,
 
     pub fn fromAngleAxis(axis: Vector3, angle: f32) @This() {
-        return m.QuaternionFromAxisAngle(axis, angle);
+        return g.QuaternionFromAxisAngle(axis, angle);
     }
 };
 
@@ -399,7 +399,7 @@ pub const Matrix = extern struct {
     }
 
     pub fn identity() @This() {
-        return m.MatrixIdentity();
+        return g.MatrixIdentity();
     }
 };
 
