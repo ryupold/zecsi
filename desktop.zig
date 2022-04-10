@@ -4,7 +4,7 @@ const fmt = std.fmt;
 const game = @import("./game.zig");
 const log = @import("./log.zig");
 
-const r = @import("ray/raylib.zig");
+const r = @import("raylib/raylib.zig");
 const ZecsiAllocator = @import("allocator.zig").ZecsiAllocator;
 
 var zalloc = ZecsiAllocator{};

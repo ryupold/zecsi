@@ -1,4 +1,4 @@
-const r = @import("ray/raylib.zig");
+const r = @import("../../../raylib/raylib.zig");
 const ecs = @import("ecs.zig");
 
 pub const Transform = struct {

@@ -13,7 +13,7 @@ pub const log = @import("./log.zig");
 pub const utils = @import("./utils.zig");
 pub const assets = @import("./assets.zig");
 
-pub const raylib = @import("ray/raylib.zig");
+pub const raylib = @import("raylib/raylib.zig");
 
 pub const baseSystems = struct{
     usingnamespace @import("camera_system.zig");

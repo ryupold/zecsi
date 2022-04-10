@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = @import("./log.zig");
-pub const raylib = @import("ray/raylib.zig");
+const raylib = @import("raylib/raylib.zig");
 const _ecs = @import("ecs/ecs.zig");
 pub const ECS = _ecs.ECS;
 const camera = @import("camera_system.zig");
