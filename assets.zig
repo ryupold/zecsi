@@ -4,7 +4,7 @@ const r = @import("raylib/raylib.zig");
 const log = @import("log.zig");
 
 pub const TextureAtlas = struct {
-    tex: r.Texture2D,
+    tex: r.Texture,
     count: struct {
         x: u32 = 1,
         y: u32 = 1,
@@ -15,7 +15,7 @@ pub const TextureAtlas = struct {
     },
 
     pub fn load(
-        path: []const u8,
+        path: [:0]const u8,
         horizontalCells: u32,
         verticalCells: u32,
     ) @This() {
@@ -23,7 +23,7 @@ pub const TextureAtlas = struct {
     }
 
     pub fn init(
-        tex: r.Texture2D,
+        tex: r.Texture,
         horizontalCells: u32,
         verticalCells: u32,
     ) @This() {
@@ -130,7 +130,7 @@ pub const Json = struct {
 
     /// loads and validates a json string from file
     /// use 'deinit' to unload the data (reload does that automatically)
-    pub fn load(path: []const u8) JsonError!@This() {
+    pub fn load(path: [:0]const u8) JsonError!@This() {
         const data = try r.LoadFileData(path);
         if (data.len == 0) return error.UnexpectedEndOfJson;
 
@@ -144,7 +144,7 @@ pub const Json = struct {
         self.data = undefined;
     }
 
-    pub fn reload(self: *@This(), path: []const u8) JsonError!void {
+    pub fn reload(self: *@This(), path: [:0]const u8) JsonError!void {
         self.deinit();
         self.* = try @This().load(path);
     }
@@ -214,12 +214,12 @@ pub const Asset = union(enum) {
 };
 
 pub const AssetLink = struct {
-    path: []const u8,
+    path: [:0]const u8,
     asset: Asset,
     loadedModTime: i128 = 0,
     currentModTime: i128 = 0,
 
-    pub fn init(path: []const u8, asset: Asset) !@This() {
+    pub fn init(path: [:0]const u8, asset: Asset) !@This() {
         var this: @This() = .{
             .path = path,
             .asset = asset,

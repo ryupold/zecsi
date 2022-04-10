@@ -41,17 +41,17 @@ pub const AssetSystem = struct {
         self.assets.deinit();
     }
 
-    pub fn get(self: *Self, path: []const u8) ?*AssetLink {
+    pub fn get(self: *Self, path: [:0]const u8) ?*AssetLink {
         return self.assets.getPtr(path);
     }
 
-    pub fn loadTexture(self: *Self, path: []const u8) !*AssetLink {
+    pub fn loadTexture(self: *Self, path: [:0]const u8) !*AssetLink {
         return self.cacheAssetLink(path, .{ .Texture = r.LoadTexture(path) });
     }
 
     pub fn loadTextureAtlas(
         self: *Self,
-        path: []const u8,
+        path: [:0]const u8,
         horizontalCells: u32,
         verticalCells: u32,
     ) !*AssetLink {
@@ -60,11 +60,11 @@ pub const AssetSystem = struct {
         });
     }
 
-    pub fn loadJson(self: *Self, path: []const u8) !*AssetLink {
+    pub fn loadJson(self: *Self, path: [:0]const u8) !*AssetLink {
         return self.cacheAssetLink(path, .{ .Json = try assets.Json.load(path) });
     }
 
-    fn cacheAssetLink(self: *Self, path: []const u8, asset: assets.Asset) !*AssetLink {
+    fn cacheAssetLink(self: *Self, path: [:0]const u8, asset: assets.Asset) !*AssetLink {
         if (self.assets.get(path)) |contained| {
             return contained;
         }
@@ -75,11 +75,11 @@ pub const AssetSystem = struct {
         return ptr;
     }
 
-    pub fn loadJsonObject(self: *Self, comptime T: type, path: []const u8) !assets.JsonObject(T) {
+    pub fn loadJsonObject(self: *Self, comptime T: type, path: [:0]const u8) !assets.JsonObject(T) {
         return try assets.JsonObject(T).init(try self.loadJson(path));
     }
 
-    pub fn loadJsonObjectOrDefault(self: *Self, path: []const u8, default: anytype) assets.JsonObject(@TypeOf(default)) {
+    pub fn loadJsonObjectOrDefault(self: *Self, path: [:0]const u8, default: anytype) assets.JsonObject(@TypeOf(default)) {
         const T = @TypeOf(default);
         const json = self.loadJson(path) catch {
             return assets.JsonObject(T).initStatic(default);

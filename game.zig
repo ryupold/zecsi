@@ -23,7 +23,7 @@ pub fn getECS() *_ecs.ECS {
 }
 
 pub const GameConfig = struct {
-    gameName: []const u8,
+    gameName: [:0]const u8,
     cwd: []const u8,
     initialWindowSize: ?struct {
         width: i32,
