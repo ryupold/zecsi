@@ -4,7 +4,7 @@ const r = @import("raylib/raylib.zig");
 const log = @import("log.zig");
 
 pub const TextureAtlas = struct {
-    tex: r.Texture,
+    tex: r.Texture2D,
     count: struct {
         x: u32 = 1,
         y: u32 = 1,
@@ -23,7 +23,7 @@ pub const TextureAtlas = struct {
     }
 
     pub fn init(
-        tex: r.Texture,
+        tex: r.Texture2D,
         horizontalCells: u32,
         verticalCells: u32,
     ) @This() {
@@ -208,7 +208,7 @@ pub fn JsonObject(comptime T: type) type {
 }
 
 pub const Asset = union(enum) {
-    Texture: r.Texture,
+    Texture2D: r.Texture2D,
     TextureAtlas: TextureAtlas,
     Json: Json,
 };
@@ -234,8 +234,8 @@ pub const AssetLink = struct {
     pub fn deinit(self: *@This()) void {
         defer self.asset = undefined;
         switch (self.asset) {
-            .Texture => {
-                r.UnloadTexture(self.asset.Texture);
+            .Texture2D => {
+                r.UnloadTexture(self.asset.Texture2D);
             },
             .TextureAtlas => {
                 self.asset.TextureAtlas.unload();
@@ -256,8 +256,8 @@ pub const AssetLink = struct {
         if (!self.hasChanged()) return false;
 
         switch (self.asset) {
-            .Texture => {
-                self.asset = .{ .Texture = r.LoadTexture(self.path) };
+            .Texture2D => {
+                self.asset = .{ .Texture2D = r.LoadTexture(self.path) };
             },
             .TextureAtlas => {
                 const count = self.asset.TextureAtlas.count;
@@ -295,9 +295,9 @@ const expectEqual = std.testing.expectEqual;
 
 test "AssetLink" {
     //TODO: write & delete pseudo asset for test
-    var ass = AssetLink.init(std.testing.allocator, .Texture, "assets/images/food/onion_unpeeled.png");
+    var ass = AssetLink.init(std.testing.allocator, .Texture2D, "assets/images/food/onion_unpeeled.png");
     defer ass.deinit();
 
     try expectEqual(ass.path, "assets/images/food/onion_unpeeled.png");
-    try expectEqual(ass.assetType, .Texture);
+    try expectEqual(ass.assetType, .Texture2D);
 }
