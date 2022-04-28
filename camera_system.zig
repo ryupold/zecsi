@@ -15,7 +15,7 @@ pub const CameraFollowingEntity = struct {
 };
 
 pub const CameraMouseDrag = struct {
-    button: i32 = 0,
+    button: r.MouseButton = .MOUSE_BUTTON_LEFT,
     _oldCameraPos: ?r.Vector2 = null,
     _dragStart: ?r.Vector2 = null,
 };
@@ -26,10 +26,10 @@ pub const CameraScrollZoom = struct {
 
 pub const CameraWASD = struct {
     speed: f32 = 1,
-    up: i32 = r.KEY_UP,
-    right: i32 = r.KEY_RIGHT,
-    down: i32 = r.KEY_DOWN,
-    left: i32 = r.KEY_LEFT,
+    up: r.KeyboardKey = .KEY_UP,
+    right: r.KeyboardKey = .KEY_RIGHT,
+    down: r.KeyboardKey = .KEY_DOWN,
+    left: r.KeyboardKey = .KEY_LEFT,
 };
 
 pub const TwoFingerZoomAndDrag = struct {
