@@ -59,7 +59,7 @@ pub fn setWindowSize(width: i32, height: i32) void {
         ecs.window.size.x = @intToFloat(f32, width);
         ecs.window.size.y = @intToFloat(f32, height);
     }
-    
+
     if (!windowsInitialized) {
         windowsInitialized = true;
         raylib.InitWindow(screenWidth, screenHeight, config.gameName);
@@ -69,11 +69,15 @@ pub fn setWindowSize(width: i32, height: i32) void {
 }
 
 pub fn mainLoop() !void {
-    raylib.BeginDrawing();
-    defer raylib.EndDrawing();
+    {
+        raylib.BeginDrawing();
+        defer raylib.EndDrawing();
 
-    raylib.ClearBackground(raylib.DARKGRAY);
-    try ecs.update(raylib.GetFrameTime());
+        raylib.ClearBackground(raylib.DARKGRAY);
+        try ecs.update(raylib.GetFrameTime());
+    }
+
+    //TODO: call system.ui for each system in ecs
 }
 
 pub fn deinit() void {

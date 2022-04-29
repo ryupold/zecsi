@@ -327,7 +327,46 @@ pub const ECS = struct {
         return null;
     }
 
+    /// Replace system instance with a copy of 'system's data
+    pub fn putSystem(self: *Self, system: anytype) !void {
+        const TSystem = @TypeOf(system);
+        const tSystemInfo = @typeInfo(TSystem);
+        comptime if (tSystemInfo != .Pointer and @typeInfo(tSystemInfo.Pointer.child) != .Struct) {
+            compError("'system' parameter must be a pointer to a system", .{});
+        };
+        if (self.getSystem(TSystem)) |alreadyRegistered| {
+            alreadyRegistered.* = system.*;
+        } else {
+            var s = try self.allocSystem(TSystem);
+            try self.systems.append(s.ref);
+            s.system.* = system.*;
+        }
+    }
+
+    /// Create a new system instance and add it to the system pool
+    /// Return previous instance if already registered
     pub fn registerSystem(self: *Self, comptime TSystem: type) !*TSystem {
+        if (self.getSystem(TSystem)) |system| {
+            return system;
+        }
+
+        var s = try self.allocSystem(TSystem);
+        try self.systems.append(s.ref);
+        comptime if (std.meta.trait.hasFn("load")(TSystem)) {
+            try s.system.load();
+        };
+        return s.system;
+    }
+
+    fn AllocSystemResult(comptime TSystem: type) type {
+        return struct {
+            ref: System,
+            system: *TSystem,
+        };
+    }
+
+    /// Allocate a new system instance and return it with its VTable (not added to system list yet)
+    fn allocSystem(self: *ECS, comptime TSystem: type) !AllocSystemResult(TSystem) {
         var system: *TSystem = try self.allocator.create(TSystem);
         errdefer self.allocator.destroy(system);
         system.* = try TSystem.init(self);
@@ -357,7 +396,7 @@ pub const ECS = struct {
             }
         };
 
-        var sys = System{
+        const sys = System{
             .ptr = @ptrToInt(system),
             .name = @typeName(TSystem),
             .alignment = @alignOf(TSystem),
@@ -366,8 +405,11 @@ pub const ECS = struct {
             .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) gen.updateImpl else null,
             .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) gen.afterImpl else null,
         };
-        try self.systems.append(sys);
-        return system;
+
+        return AllocSystemResult(TSystem){
+            .ref = sys,
+            .system = system,
+        };
     }
 
     pub fn update(self: *Self, dt: f32) !void {
