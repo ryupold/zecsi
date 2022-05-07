@@ -1,7 +1,9 @@
 const std = @import("std");
 const raylib = @import("raylib/raylib.zig");
 
-pub const MouseDragger = struct {
+/// detects mouse press and drag to draw a line
+/// alternatively detects a single touch point
+pub const PointerDragger = struct {
     button: raylib.MouseButton,
     down: ?raylib.Vector2 = null,
     up: ?raylib.Vector2 = null,
@@ -12,7 +14,7 @@ pub const MouseDragger = struct {
         const touchCount = raylib.GetTouchPointCount();
         defer self._lastTouchCount = touchCount;
 
-        if (self.up != null) {
+        if (self.up != null or touchCount > 1) {
             self.down = null;
             self.current = null;
             self.up = null;
@@ -38,10 +40,10 @@ pub const MouseDragger = struct {
         }
 
         if (raylib.IsMouseButtonReleased(self.button)) {
-            self.up = raylib.GetMousePosition();
+            self.up = self.current;
         }
         if (self._lastTouchCount == 1 and touchCount == 0) {
-            self.up = raylib.GetTouchPosition(0);
+            self.up = self.current;
         }
     }
 

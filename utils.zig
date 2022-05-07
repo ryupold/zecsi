@@ -1,4 +1,5 @@
 const std = @import("std");
+const raylib = @import("raylib/raylib.zig");
 
 pub const Timer = struct {
     timePassed: f32 = 0,
@@ -44,6 +45,41 @@ pub fn ignore(v: anytype) void {
 
 pub fn vouch(v: anytype) @typeInfo(@TypeOf(v)).ErrorUnion.payload {
     return v catch |err| std.debug.panic("this should never crash: {?}", .{err});
+}
+
+pub const DrawArrowConfig = struct {
+    headSize: f32 = 20,
+    color: raylib.Color = raylib.GREEN.set(.{ .a = 127 }),
+};
+
+pub fn drawArrow(from: raylib.Vector2, to: raylib.Vector2, config: DrawArrowConfig) void {
+    raylib.DrawLine(
+        @floatToInt(i32, from.x),
+        @floatToInt(i32, from.y),
+        @floatToInt(i32, to.x),
+        @floatToInt(i32, to.y),
+        config.color,
+    );
+
+    const arrowLength = from.sub(to).normalize().scale(config.headSize);
+
+    const aSide = arrowLength.rotate(raylib.PI / 4).add(to);
+    const bSide = arrowLength.rotate(-raylib.PI / 4).add(to);
+
+    raylib.DrawLine(
+        @floatToInt(i32, aSide.x),
+        @floatToInt(i32, aSide.y),
+        @floatToInt(i32, to.x),
+        @floatToInt(i32, to.y),
+        config.color,
+    );
+    raylib.DrawLine(
+        @floatToInt(i32, bSide.x),
+        @floatToInt(i32, bSide.y),
+        @floatToInt(i32, to.x),
+        @floatToInt(i32, to.y),
+        config.color,
+    );
 }
 
 //=== TESTS =======================================================================================
