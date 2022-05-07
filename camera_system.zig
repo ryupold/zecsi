@@ -178,6 +178,14 @@ pub const CameraSystem = struct {
         return r.GetWorldToScreen2D(worldPos, cam);
     }
 
+    pub fn screenLengthToWorld(self: Self, lenght: f32) f32 {
+        return lenght / self.zoom();
+    }
+
+    pub fn worldLengthToScreen(self: Self, lenght: f32) f32 {
+        return self.zoom() * lenght;
+    }
+
     /// current camera zoom
     pub fn zoom(self: Self) f32 {
         const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?;

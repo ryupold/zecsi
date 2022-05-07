@@ -28,6 +28,7 @@ pub const ECS = struct {
         var arena = try allocator.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(arenaParent);
         const compAllocator = arena.allocator();
+
         return Self{
             .allocator = allocator,
             .arena = arena,
@@ -346,8 +347,8 @@ pub const ECS = struct {
     /// Create a new system instance and add it to the system pool
     /// Return previous instance if already registered
     pub fn registerSystem(self: *Self, comptime TSystem: type) !*TSystem {
-        if (self.getSystem(TSystem)) |system| {
-            return system;
+        if (self.getSystem(TSystem) != null) {
+            return error.SystemAlreadyRegistered;
         }
 
         var s = try self.allocSystem(TSystem);

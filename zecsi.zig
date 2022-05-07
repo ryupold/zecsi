@@ -12,6 +12,7 @@ pub const ZecsiAllocator = @import("allocator.zig").ZecsiAllocator;
 pub const log = @import("./log.zig");
 pub const utils = @import("./utils.zig");
 pub const assets = @import("./assets.zig");
+pub const inputHandlers = @import("./input_handlers.zig");
 
 pub const raylib = @import("raylib/raylib.zig");
 
