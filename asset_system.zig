@@ -46,7 +46,10 @@ pub const AssetSystem = struct {
     }
 
     pub fn loadTexture(self: *Self, path: [:0]const u8) !*AssetLink {
-        return self.cacheAssetLink(path, .{ .Texture = r.LoadTexture(path) });
+        if (self.assets.get(path)) |contained| {
+            return contained;
+        }
+        return self.cacheAssetLink(path, .{ .Texture2D = r.LoadTexture(path) });
     }
 
     pub fn loadTextureAtlas(
@@ -55,20 +58,22 @@ pub const AssetSystem = struct {
         horizontalCells: u32,
         verticalCells: u32,
     ) !*AssetLink {
+        if (self.assets.get(path)) |contained| {
+            return contained;
+        }
         return self.cacheAssetLink(path, .{
             .TextureAtlas = TextureAtlas.load(path, horizontalCells, verticalCells),
         });
     }
 
     pub fn loadJson(self: *Self, path: [:0]const u8) !*AssetLink {
+        if (self.assets.get(path)) |contained| {
+            return contained;
+        }
         return self.cacheAssetLink(path, .{ .Json = try assets.Json.load(path) });
     }
 
     fn cacheAssetLink(self: *Self, path: [:0]const u8, asset: assets.Asset) !*AssetLink {
-        if (self.assets.get(path)) |contained| {
-            return contained;
-        }
-
         const ptr = try self.ecs.allocator.create(AssetLink);
         ptr.* = try AssetLink.init(path, asset);
         try self.assets.put(path, ptr);

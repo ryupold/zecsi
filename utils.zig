@@ -39,6 +39,10 @@ pub fn randomF32(rng: std.rand.Random, min: f32, max: f32) f32 {
     return rng.float(f32) * (max - min) + min;
 }
 
+pub fn randomVector2(rng: std.rand.Random, min: raylib.Vector2, max: raylib.Vector2) raylib.Vector2 {
+    return .{ .x = randomF32(rng, min.x, max.x), .y = randomF32(rng, min.y, max.y) };
+}
+
 pub fn ignore(v: anytype) void {
     _ = v catch |err| std.debug.panic("this should never crash: {?}", .{err});
 }
@@ -52,7 +56,32 @@ pub const DrawArrowConfig = struct {
     color: raylib.Color = raylib.GREEN.set(.{ .a = 127 }),
 };
 
-pub fn drawArrow(from: raylib.Vector2, to: raylib.Vector2, config: DrawArrowConfig) void {
+pub fn drawArrow(start: raylib.Vector2, end: raylib.Vector2, config: DrawArrowConfig) void {
+    const from = raylib.Vector2{
+        .x = std.math.clamp(
+            start.x,
+            @intToFloat(f32, std.math.minInt(i32)),
+            @intToFloat(f32, std.math.maxInt(i32)),
+        ),
+        .y = std.math.clamp(
+            start.y,
+            @intToFloat(f32, std.math.minInt(i32)),
+            @intToFloat(f32, std.math.maxInt(i32)),
+        ),
+    };
+    const to = raylib.Vector2{
+        .x = std.math.clamp(
+            end.x,
+            @intToFloat(f32, std.math.minInt(i32)),
+            @intToFloat(f32, std.math.maxInt(i32)),
+        ),
+        .y = std.math.clamp(
+            end.y,
+            @intToFloat(f32, std.math.minInt(i32)),
+            @intToFloat(f32, std.math.maxInt(i32)),
+        ),
+    };
+
     raylib.DrawLine(
         @floatToInt(i32, from.x),
         @floatToInt(i32, from.y),
