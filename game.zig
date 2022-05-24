@@ -8,17 +8,19 @@ const camera = @import("camera_system.zig");
 
 const Self = @This();
 
-var allocator: Allocator = undefined;
+pub var isInitialized = false;
+var _allocator: Allocator = undefined;
 var arena: std.heap.ArenaAllocator = undefined;
 var windowsInitialized = false;
 var screenWidth: i32 = 100;
 var screenHeight: i32 = 100;
-var ecsInitialized = false;
 var ecs: *_ecs.ECS = undefined;
+var gameEntryPoint: fn (ecs: *ECS) anyerror!void = undefined;
+var cleanup: ?fn (ecs: *ECS) anyerror!void = null;
 var config: GameConfig = undefined;
 
 pub fn getECS() *_ecs.ECS {
-    if (!ecsInitialized) @panic("call init first to initialize a game");
+    if (!isInitialized) @panic("call init first to initialize a game");
     return ecs;
 }
 
@@ -29,17 +31,25 @@ pub const GameConfig = struct {
         width: i32,
         height: i32,
     } = null,
+    exitKey: raylib.KeyboardKey = .KEY_ESCAPE,
 };
 
-pub fn init(alloc: Allocator, c: GameConfig) !void {
-    config = c;
-    if (ecsInitialized) return error.AlreadyStarted;
-    Self.allocator = alloc;
+pub fn init(
+    allocator: Allocator,
+    initialConfig: GameConfig,
+    start: fn (ecs: *ECS) anyerror!void,
+    stop: ?fn (ecs: *ECS) anyerror!void,
+) !void {
+    if (isInitialized) return error.AlreadyStarted;
+    _allocator = allocator;
+    config = initialConfig;
+    gameEntryPoint = start;
+    cleanup = stop;
 
-    ecs = try allocator.create(ECS);
-    ecs.* = try _ecs.ECS.init(allocator, allocator);
-    ecsInitialized = true;
-    if (ecsInitialized) {
+    ecs = try _allocator.create(ECS);
+    ecs.* = try _ecs.ECS.init(_allocator, _allocator);
+    isInitialized = true;
+    if (isInitialized) {
         ecs.window.size.x = @intToFloat(f32, screenWidth);
         ecs.window.size.y = @intToFloat(f32, screenWidth);
     }
@@ -50,12 +60,14 @@ pub fn init(alloc: Allocator, c: GameConfig) !void {
     if (!windowsInitialized) {
         setWindowSize(64, 64);
     }
+
+    try gameEntryPoint(ecs);
 }
 
 pub fn setWindowSize(width: i32, height: i32) void {
     screenWidth = width;
     screenHeight = height;
-    if (ecsInitialized) {
+    if (isInitialized) {
         ecs.window.size.x = @intToFloat(f32, width);
         ecs.window.size.y = @intToFloat(f32, height);
     }
@@ -81,8 +93,10 @@ pub fn mainLoop() !void {
 }
 
 pub fn deinit() void {
+    if (cleanup) |c| {
+        c(ecs) catch |err| @panic(std.fmt.allocPrint(_allocator, "{?}", .{err}));
+    }
     ecs.deinit();
-    // arena.deinit(); //TODO: find out if this is needed
     raylib.CloseWindow();
-    allocator.destroy(ecs);
+    _allocator.destroy(ecs);
 }
