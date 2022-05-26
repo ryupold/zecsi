@@ -376,6 +376,7 @@ pub const ECS = struct {
             const hasBefore = std.meta.trait.hasFn("before")(TSystem);
             const hasUpdate = std.meta.trait.hasFn("update")(TSystem);
             const hasAfter = std.meta.trait.hasFn("after")(TSystem);
+            const hasUI = std.meta.trait.hasFn("ui")(TSystem);
 
             pub fn deinitImpl(ptr: usize) void {
                 const this = @intToPtr(*TSystem, ptr);
@@ -395,6 +396,10 @@ pub const ECS = struct {
                 const this = @intToPtr(*TSystem, ptr);
                 if (hasAfter) try this.after(dt);
             }
+            pub fn uiImpl(ptr: usize, dt: f32) !void {
+                const this = @intToPtr(*TSystem, ptr);
+                if (hasUI) try this.ui(dt);
+            }
         };
 
         const sys = System{
@@ -405,6 +410,7 @@ pub const ECS = struct {
             .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) gen.beforeImpl else null,
             .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) gen.updateImpl else null,
             .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) gen.afterImpl else null,
+            .uiFn = if (std.meta.trait.hasFn("ui")(TSystem)) gen.uiImpl else null,
         };
 
         return AllocSystemResult(TSystem){
@@ -413,6 +419,7 @@ pub const ECS = struct {
         };
     }
 
+    /// execution order: before0,before1,before2,update0,update1,update2,after2,after1,after0,ui0,ui1,ui2
     pub fn update(self: *Self, dt: f32) !void {
         for (self.systems.items) |*system| {
             try system.before(dt);
@@ -420,8 +427,14 @@ pub const ECS = struct {
         for (self.systems.items) |*system| {
             try system.update(dt);
         }
+
+        var i: usize = self.systems.items.len;
+        while (i > 0) : (i -= 1) {
+            try self.systems.items[i-1].after(dt);
+        }
+
         for (self.systems.items) |*system| {
-            try system.after(dt);
+            try system.ui(dt);
         }
     }
 };
@@ -436,6 +449,7 @@ pub const System = struct {
     beforeFn: ?fn (usize, f32) anyerror!void,
     updateFn: ?fn (usize, f32) anyerror!void,
     afterFn: ?fn (usize, f32) anyerror!void,
+    uiFn: ?fn (usize, f32) anyerror!void,
 
     pub fn deinit(self: *@This()) void {
         @call(.{}, self.deinitFn, .{self.ptr});
@@ -451,6 +465,10 @@ pub const System = struct {
 
     pub fn after(self: *@This(), dt: f32) !void {
         if (self.afterFn) |afterFn| try @call(.{}, afterFn, .{ self.ptr, dt });
+    }
+
+    pub fn ui(self: *@This(), dt: f32) !void {
+        if (self.uiFn) |uiFn| try @call(.{}, uiFn, .{ self.ptr, dt });
     }
 };
 
@@ -880,6 +898,10 @@ const ExampleSystem = struct {
 
     pub fn after(self: *@This(), dt: f32) !void {
         self.testState += dt;
+    }
+
+    pub fn ui(self: *@This(), dt: f32) !void {
+        self.testState *= dt;
     }
 };
 
