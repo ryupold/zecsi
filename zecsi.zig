@@ -17,7 +17,8 @@ pub const inputHandlers = @import("./input_handlers.zig");
 pub const raylib = @import("raylib/raylib.zig");
 
 pub const baseSystems = struct{
-    usingnamespace @import("camera_system.zig");
-    usingnamespace @import("asset_system.zig");
-    usingnamespace @import("grid_placement_system.zig");
+    usingnamespace @import("systems/camera_system.zig");
+    // usingnamespace @import("systems/camera_system_3d.zig");
+    usingnamespace @import("systems/asset_system.zig");
+    usingnamespace @import("systems/grid_placement_system.zig");
 };

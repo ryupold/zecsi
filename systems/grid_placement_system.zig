@@ -1,14 +1,14 @@
 const std = @import("std");
-const ECS = @import("ecs/ecs.zig").ECS;
-const r = @import("raylib/raylib.zig");
-const log = @import("log.zig");
+const ECS = @import("../ecs/ecs.zig").ECS;
+const r = @import("../raylib/raylib.zig");
+const log = @import("../log.zig");
 const camera = @import("camera_system.zig");
 const CameraSystem = camera.CameraSystem;
 const screenToWorld = camera.screenToWorld;
 const builtin = @import("builtin");
 const AssetSystem = @import("asset_system.zig").AssetSystem;
-const AssetLink = @import("assets.zig").AssetLink;
-const JsonObject = @import("assets.zig").JsonObject;
+const AssetLink = @import("../assets.zig").AssetLink;
+const JsonObject = @import("../assets.zig").JsonObject;
 
 pub const Vector2 = r.Vector2;
 

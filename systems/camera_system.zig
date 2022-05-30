@@ -1,18 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const log = @import("log.zig");
-const _ecs = @import("ecs/ecs.zig");
-const r = @import("raylib/raylib.zig");
+const log = @import("../log.zig");
+const _ecs = @import("../ecs/ecs.zig");
+const r = @import("../raylib/raylib.zig");
 const ECS = _ecs.ECS;
 const Entity = _ecs.Entity;
 const Component = _ecs.Component;
-const vouch = @import("utils.zig").vouch;
-const ignore = @import("utils.zig").ignore;
-
-pub const CameraFollowingEntity = struct {
-    followEntity: _ecs.EntityID,
-    offset: r.Vector2 = r.Vector2.zero(),
-};
+const vouch = @import("../utils.zig").vouch;
+const ignore = @import("../utils.zig").ignore;
 
 pub const CameraMouseDrag = struct {
     button: r.MouseButton = .MOUSE_BUTTON_LEFT,
@@ -232,20 +227,6 @@ pub const CameraSystem = struct {
         } else {
             ignore(self.ecs.add(self.camera, zoomDragger));
         }
-    }
-
-    pub fn followEntity(self: *Self, config: CameraFollowingEntity) void {
-        log.debug("follow {?}", .{config});
-        if (self.ecs.getOnePtr(self.camera, CameraFollowingEntity)) |follow| {
-            follow.* = config;
-        } else {
-            ignore(self.ecs.add(self.camera, config));
-        }
-    }
-
-    pub fn stopFollowing(self: *Self) void {
-        log.debug("stop following", .{});
-        self.ecs.removeAll(self.camera, CameraFollowingEntity);
     }
 };
 

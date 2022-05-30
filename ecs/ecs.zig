@@ -430,7 +430,7 @@ pub const ECS = struct {
 
         var i: usize = self.systems.items.len;
         while (i > 0) : (i -= 1) {
-            try self.systems.items[i-1].after(dt);
+            try self.systems.items[i - 1].after(dt);
         }
 
         for (self.systems.items) |*system| {

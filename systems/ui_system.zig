@@ -1,7 +1,7 @@
 const std = @import("std");
-const r = @import("raylib/raylib.zig");
-const log = @import("log.zig");
-const _ecs = @import("ecs/ecs.zig");
+const r = @import("../raylib/raylib.zig");
+const log = @import("../log.zig");
+const _ecs = @import("../ecs/ecs.zig");
 const ECS = _ecs.ECS;
 const ray = @cImport({
     @cInclude("raylib_marshall.h");
