@@ -57,58 +57,28 @@ pub const DrawArrowConfig = struct {
 };
 
 pub fn drawArrow(start: raylib.Vector2, end: raylib.Vector2, config: DrawArrowConfig) void {
-    const from = raylib.Vector2{
-        .x = std.math.clamp(
-            start.x,
-            @intToFloat(f32, std.math.minInt(i32)),
-            @intToFloat(f32, std.math.maxInt(i32)),
-        ),
-        .y = std.math.clamp(
-            start.y,
-            @intToFloat(f32, std.math.minInt(i32)),
-            @intToFloat(f32, std.math.maxInt(i32)),
-        ),
-    };
-    const to = raylib.Vector2{
-        .x = std.math.clamp(
-            end.x,
-            @intToFloat(f32, std.math.minInt(i32)),
-            @intToFloat(f32, std.math.maxInt(i32)),
-        ),
-        .y = std.math.clamp(
-            end.y,
-            @intToFloat(f32, std.math.minInt(i32)),
-            @intToFloat(f32, std.math.maxInt(i32)),
-        ),
-    };
+    raylib.DrawLineV(start, end, config.color);
 
-    raylib.DrawLine(
-        @floatToInt(i32, from.x),
-        @floatToInt(i32, from.y),
-        @floatToInt(i32, to.x),
-        @floatToInt(i32, to.y),
-        config.color,
-    );
+    const arrowLength = start.sub(end).normalize().scale(config.headSize);
 
-    const arrowLength = from.sub(to).normalize().scale(config.headSize);
+    const aSide = arrowLength.rotate(raylib.PI / 4).add(end);
+    const bSide = arrowLength.rotate(-raylib.PI / 4).add(end);
 
-    const aSide = arrowLength.rotate(raylib.PI / 4).add(to);
-    const bSide = arrowLength.rotate(-raylib.PI / 4).add(to);
+    raylib.DrawLineV(aSide, end, config.color);
+    raylib.DrawLineV(bSide, end, config.color);
+}
 
-    raylib.DrawLine(
-        @floatToInt(i32, aSide.x),
-        @floatToInt(i32, aSide.y),
-        @floatToInt(i32, to.x),
-        @floatToInt(i32, to.y),
-        config.color,
-    );
-    raylib.DrawLine(
-        @floatToInt(i32, bSide.x),
-        @floatToInt(i32, bSide.y),
-        @floatToInt(i32, to.x),
-        @floatToInt(i32, to.y),
-        config.color,
-    );
+///TODO: draw angle head (it's just a line for now)
+pub fn drawArrow3D(start: raylib.Vector3, end: raylib.Vector3, config: DrawArrowConfig) void {
+    raylib.DrawLine3D(start, end, config.color);
+
+    // const arrowLength = start.sub(end).normalize().scale(config.headSize);
+
+    // const aSide = arrowLength.rotate(raylib.PI / 4).add(end);
+    // const bSide = arrowLength.rotate(-raylib.PI / 4).add(end);
+
+    // raylib.DrawLine3D(aSide, end, config.color);
+    // raylib.DrawLine3D(bSide, end, config.color);
 }
 
 //=== TESTS =======================================================================================
