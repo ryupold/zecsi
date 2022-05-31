@@ -20,7 +20,7 @@ pub const ECS = struct {
     componentAllocator: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
 
-    /// 
+    ///
     pub fn init(
         allocator: std.mem.Allocator,
         arenaParent: std.mem.Allocator,
@@ -82,17 +82,17 @@ pub const ECS = struct {
 
     /// when this method results in an bus error at runtime you have to first put the components in const variables
     /// and then pass them as tuple into this
-    /// 
+    ///
     /// instead of this:
-    /// 
+    ///
     ///ecs.create(.{StudentTable{
     ///     .pos = tablePos,
     ///     .width = tables.tableArea.x,
     ///     .height = tables.tableArea.y,
     ///}});
-    /// 
+    ///
     /// do this:
-    /// 
+    ///
     /// const table = StudentTable{
     ///     .pos = tablePos,
     ///     .width = tables.tableArea.x,
@@ -244,7 +244,7 @@ pub const ECS = struct {
 
     /// reference to the component data
     /// this reference can get invalid when adding/removing components so better never store it somewhere
-    /// if you wish to have prolonged reference to a particular component use 'Entity.getOne()' to get a 'Component' 
+    /// if you wish to have prolonged reference to a particular component use 'Entity.getOne()' to get a 'Component'
     pub fn getOnePtr(self: *Self, entity: anytype, comptime TComponent: type) ?*TComponent {
         const entityID = self.getID(entity);
         var e = if (self.getEntity(entityID)) |eid| eid else return null;
@@ -803,6 +803,11 @@ test "getPtr to get specific component data" {
     defer ecs.deinit();
 
     var e = try ecs.createEmpty();
+
+    //return null if component is not registered
+    const shouldBeNull = ecs.getPtr(Target, std.mem.zeroes(Component));
+    try expect(shouldBeNull == null);
+
     const c0 = try ecs.add(e, Target{ .x = 1, .y = 2 });
     _ = try ecs.add(e, Target{ .x = 2, .y = 3 });
     const c2 = try ecs.add(e, Target{ .x = 3, .y = 4 });
@@ -829,7 +834,7 @@ test "query by archetype (as pointers)" {
     _ = try ecs.create(.{ Position{ .x = 4, .y = 5 }, Target{ .x = 11, .y = 22 } });
     _ = try ecs.create(.{ Position{ .x = 5, .y = 6 }, Target{ .x = 22, .y = 33 } });
 
-    var it = ecs.query(&[_]type{Position});
+    var it = ecs.query(.{Position});
 
     //order is not preserved
     try expectEqual(Position{ .x = 2, .y = 3 }, it.next().?.getData(&ecs, Position).?.*);
@@ -839,7 +844,7 @@ test "query by archetype (as pointers)" {
     try expectEqual(Position{ .x = 4, .y = 5 }, it.next().?.getData(&ecs, Position).?.*);
     try expect(it.next() == null);
 
-    var it2 = ecs.query(&[_]type{ Position, Target });
+    var it2 = ecs.query(.{ Position, Target });
     var e = it2.next().?;
     try expectEqual(Position{ .x = 5, .y = 6 }, e.getData(&ecs, Position).?.*);
     try expectEqual(Target{ .x = 22, .y = 33 }, e.getData(&ecs, Target).?.*);
@@ -859,7 +864,7 @@ test "query by archetype (as values)" {
     _ = try ecs.create(.{Position{ .x = 5, .y = 6 }});
     _ = try ecs.create(.{Position{ .x = 6, .y = 7 }});
 
-    var it = ecs.query(&[_]type{Position});
+    var it = ecs.query(.{Position});
     var e = it.next().?;
     //order is not preserved
     try expectEqual(Position{ .x = 2, .y = 3 }, e.getData(&ecs, Position).?.*);
@@ -935,10 +940,8 @@ test "get system" {
     var ecs = try ECS.init(std.testing.allocator, std.testing.allocator);
     defer ecs.deinit();
 
-    const system1: *ExampleSystem = try ecs.registerSystem(ExampleSystem);
+    _ = try ecs.registerSystem(ExampleSystem);
     const system2: *MinimalSystem = try ecs.registerSystem(MinimalSystem);
-    const system3 = try ecs.registerSystem(ExampleSystem);
-    try expect(system1 != system3);
 
     const minimal = ecs.getSystem(MinimalSystem);
     try expect(minimal == system2);

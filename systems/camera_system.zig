@@ -34,8 +34,8 @@ pub const TwoFingerZoomAndDrag = struct {
     _startFingerPositions: ?struct { a: r.Vector2, b: r.Vector2 } = null,
 };
 
-var _camera: Component = undefined;
-var _ecsInstance: *ECS = undefined;
+var _camera: ?Component = null;
+var _ecsInstance: ?*ECS = null;
 
 pub const CameraSystem = struct {
     pub const Self = @This();
@@ -231,16 +231,26 @@ pub const CameraSystem = struct {
 };
 
 pub fn screenToWorld(screenPos: r.Vector2) r.Vector2 {
-    const cam = _ecsInstance.getPtr(r.Camera2D, _camera).?.*;
-    return r.GetScreenToWorld2D(screenPos, cam);
+    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    if (builtin.mode == .Debug) {
+        if (cam == null) {
+            @panic("no Camera2D available");
+        }
+    }
+    return r.GetScreenToWorld2D(screenPos, cam.?.*);
 }
 
 pub fn worldToScreen(worldPos: r.Vector2) r.Vector2 {
-    const cam = _ecsInstance.getPtr(r.Camera2D, _camera).?.*;
-    return r.GetWorldToScreen2D(worldPos, cam);
+    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    if (builtin.mode == .Debug) {
+        if (cam == null) {
+            @panic("no Camera2D available");
+        }
+    }
+    return r.GetWorldToScreen2D(worldPos, cam.?.*);
 }
 
 pub fn zoom() f32 {
-    const cam = _ecsInstance.getPtr(r.Camera2D, _camera).?;
+    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?).?;
     return cam.zoom;
 }

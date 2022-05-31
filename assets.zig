@@ -193,7 +193,9 @@ pub fn JsonObject(comptime T: type) type {
         }
 
         pub fn get(self: *@This()) T {
-            if (builtin.mode != .Debug or self.static) return self.object; //no asset reloading in release mode
+            if (builtin.mode != .Debug or self.static) {
+                return self.object; //no asset reloading in release mode
+            }
 
             if (self.modTime != self.json.loadedModTime) {
                 self.object = self.json.asset.Json.as(T) catch |err| {
@@ -272,7 +274,7 @@ pub const AssetLink = struct {
     }
 
     /// check mod time of the file with 'std.fs.File.stat()'
-    /// update self.currentModTime 
+    /// update self.currentModTime
     pub fn check(self: *@This()) !bool {
         //this makes no sense in webassembly
         if (builtin.os.tag != .wasi and builtin.os.tag != .emscripten) {

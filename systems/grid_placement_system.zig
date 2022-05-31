@@ -89,9 +89,10 @@ pub const GridPlacementSystem = struct {
 
     pub fn init(ecs: *ECS) !@This() {
         const ass = ecs.getSystem(AssetSystem).?;
+        const defaultConfig = GridConfig{ .cellSize = 64 };
         return @This(){
             .ecs = ecs,
-            .config = ass.loadJsonObjectOrDefault("assets/data/grid_config.json", GridConfig{ .cellSize = 64 }),
+            .config = ass.loadJsonObjectOrDefault("assets/data/grid_config.json", defaultConfig),
         };
     }
 
@@ -113,6 +114,8 @@ pub const GridPlacementSystem = struct {
 
         if (self.cameraSystem == null)
             self.cameraSystem = self.ecs.getSystem(CameraSystem);
+
+        if (self.cameraSystem == null) return;
 
         const min = screenToWorld(.{
             .x = -self.cellSize() * 2,
@@ -157,7 +160,8 @@ pub const GridPlacementSystem = struct {
     }
 
     pub fn cellSize(self: *@This()) f32 {
-        return self.config.get().cellSize;
+        const config = self.config.get();
+        return config.cellSize;
     }
 
     pub fn toGridLen(self: *@This(), l: f32) i32 {
@@ -178,7 +182,7 @@ pub const GridPlacementSystem = struct {
         };
     }
 
-    /// returns center world pos of the grid cell 
+    /// returns center world pos of the grid cell
     /// (same as toWorldPositionEx(pos, .{.x=0.5, .y=0.5}))
     pub fn toWorldPosition(self: *@This(), pos: GridPosition) Vector2 {
         const cs = self.cellSize();
