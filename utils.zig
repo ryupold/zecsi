@@ -52,17 +52,23 @@ pub fn vouch(v: anytype) @typeInfo(@TypeOf(v)).ErrorUnion.payload {
 }
 
 pub const DrawArrowConfig = struct {
+    startOffset: f32 = 0,
+    endOffset: f32 = 0,
     headSize: f32 = 20,
     color: raylib.Color = raylib.GREEN.set(.{ .a = 127 }),
 };
 
-pub fn drawArrow(start: raylib.Vector2, end: raylib.Vector2, config: DrawArrowConfig) void {
+pub fn drawArrow(from: raylib.Vector2, to: raylib.Vector2, config: DrawArrowConfig) void {
+    const direction = to.sub(from).normalize();
+    const start = from.add(direction.scale(config.startOffset));
+    const end = to.sub(direction.scale(config.endOffset));
+
     raylib.DrawLineV(start, end, config.color);
 
-    const arrowLength = start.sub(end).normalize().scale(config.headSize);
+    const arrowHeadLength = direction.scale(config.headSize);
 
-    const aSide = arrowLength.rotate(raylib.PI / 4).add(end);
-    const bSide = arrowLength.rotate(-raylib.PI / 4).add(end);
+    const aSide = arrowHeadLength.rotate(-raylib.PI * 3 / 4).add(end);
+    const bSide = arrowHeadLength.rotate(raylib.PI * 3 / 4).add(end);
 
     raylib.DrawLineV(aSide, end, config.color);
     raylib.DrawLineV(bSide, end, config.color);
