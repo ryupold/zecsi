@@ -125,7 +125,7 @@ pub const GridPlacementSystem = struct {
             .x = self.ecs.window.size.x + self.cellSize() * 2,
             .y = self.ecs.window.size.y + self.cellSize() * 2,
         });
-        const scale = 1 / camera.zoom();
+        const scale = 1 / self.cameraSystem.?.getCamZoom();
         const halfCell: f32 = self.cellSize() / 2;
 
         //vertical lines

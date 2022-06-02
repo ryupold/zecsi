@@ -90,11 +90,11 @@ pub const CameraSystem3D = struct {
     }
 
     //=== CAM functions ===========================================================================
-    pub fn getCam(self: Self) ?r.Camera3D {
+    pub fn getCam(self: Self) r.Camera3D {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
             return cam;
         }
-        return null;
+        unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCam(self: Self, cam: r.Camera3D) void {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |c| {
@@ -108,11 +108,11 @@ pub const CameraSystem3D = struct {
         }
     }
 
-    pub fn getCamPos(self: Self) ?r.Vector3 {
+    pub fn getCamPos(self: Self) r.Vector3 {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
             return cam.position;
         }
-        return null;
+        unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamPos(self: Self, pos: r.Vector3) void {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
@@ -120,11 +120,11 @@ pub const CameraSystem3D = struct {
         }
     }
 
-    pub fn getCamTarget(self: Self) ?r.Vector3 {
+    pub fn getCamTarget(self: Self) r.Vector3 {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
             return cam.target;
         }
-        return null;
+        unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamTarget(self: Self, target: r.Vector3) void {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
@@ -132,11 +132,11 @@ pub const CameraSystem3D = struct {
         }
     }
 
-    pub fn getCamUp(self: Self) ?r.Vector3 {
+    pub fn getCamUp(self: Self) r.Vector3 {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
             return cam.up;
         }
-        return null;
+        unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamUp(self: Self, up: r.Vector3) void {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
@@ -144,11 +144,11 @@ pub const CameraSystem3D = struct {
         }
     }
 
-    pub fn getCamFovY(self: Self) ?f32 {
+    pub fn getCamFovY(self: Self) f32 {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
             return cam.fovy;
         }
-        return null;
+        unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamFovY(self: Self, fovy: f32) void {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {

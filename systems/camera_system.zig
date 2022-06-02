@@ -174,17 +174,11 @@ pub const CameraSystem = struct {
     }
 
     pub fn screenLengthToWorld(self: Self, lenght: f32) f32 {
-        return lenght / self.zoom();
+        return lenght / self.getCamZoom();
     }
 
     pub fn worldLengthToScreen(self: Self, lenght: f32) f32 {
-        return self.zoom() * lenght;
-    }
-
-    /// current camera zoom
-    pub fn zoom(self: Self) f32 {
-        const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?;
-        return cam.zoom;
+        return self.getCamZoom() * lenght;
     }
 
     pub fn after(self: *Self, _: f32) !void {
@@ -192,6 +186,75 @@ pub const CameraSystem = struct {
             r.EndMode2D();
         }
     }
+
+    //=== CAM functions ===========================================================================
+    pub fn getCam(self: Self) r.Camera2D {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            return cam;
+        }
+        unreachable; //if we have a CameraSystem it should have created a camera intance
+    }
+    pub fn setCam(self: Self, cam: r.Camera2D) void {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |c| {
+            c.* = cam;
+        }
+    }
+
+    pub fn setCamMode(self: Self, mode: r.CameraMode) void {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            r.SetCameraMode(cam.*, mode);
+        }
+    }
+
+    pub fn getCamOffset(self: Self) r.Vector2 {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            return cam.offset;
+        }
+        unreachable; //if we have a CameraSystem it should have created a camera intance
+    }
+    pub fn setCamOffset(self: Self, offset: r.Vector2) void {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            cam.offset = offset;
+        }
+    }
+
+    pub fn getCamTarget(self: Self) r.Vector2 {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            return cam.target;
+        }
+        unreachable; //if we have a CameraSystem it should have created a camera intance
+    }
+    pub fn setCamTarget(self: Self, target: r.Vector2) void {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            cam.target = target;
+        }
+    }
+
+    pub fn getCamZoom(self: Self) f32 {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            return cam.zoom;
+        }
+        unreachable; //if we have a CameraSystem it should have created a camera intance
+    }
+    pub fn setCamZoom(self: Self, zoom: f32) void {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            cam.zoom = zoom;
+        }
+    }
+
+    pub fn getCamRotation(self: Self) f32 {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            return cam.rotation;
+        }
+        unreachable; //if we have a CameraSystem it should have created a camera intance
+    }
+    pub fn setCamRotation(self: Self, rotation: f32) void {
+        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+            cam.rotation = rotation;
+        }
+    }
+
+    //=== CONTROL components ======================================================================
 
     pub fn initCameraWASD(self: *Self, wasd: CameraWASD) void {
         log.debug("init camera wasd {?}", .{wasd});
@@ -248,9 +311,4 @@ pub fn worldToScreen(worldPos: r.Vector2) r.Vector2 {
         }
     }
     return r.GetWorldToScreen2D(worldPos, cam.?.*);
-}
-
-pub fn zoom() f32 {
-    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?).?;
-    return cam.zoom;
 }
