@@ -312,3 +312,23 @@ pub fn worldToScreen(worldPos: r.Vector2) r.Vector2 {
     }
     return r.GetWorldToScreen2D(worldPos, cam.?.*);
 }
+
+pub fn screenLengthToWorld(lenght: f32) f32 {
+    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    if (builtin.mode == .Debug) {
+        if (cam == null) {
+            @panic("no Camera2D available");
+        }
+    }
+    return lenght / cam.?.zoom;
+}
+
+pub fn worldLengthToScreen(lenght: f32) f32 {
+    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    if (builtin.mode == .Debug) {
+        if (cam == null) {
+            @panic("no Camera2D available");
+        }
+    }
+    return cam.?.zoom * lenght;
+}
