@@ -125,12 +125,16 @@ pub const ECS = struct {
     }
 
     pub fn add(self: *Self, entity: anytype, component: anytype) !Component {
+        return self.addByName(entity, component, @typeName(@TypeOf(component)));
+    }
+
+    pub fn addByName(self: *Self, entity: anytype, component: anytype, name: []const u8) !Component {
         const T = @TypeOf(component);
+
         const entityID = self.getID(entity);
         var e = if (self.getEntity(entityID)) |eid| eid else return error.EntityNotFound;
-
         var c = Component{
-            .t = @typeName(@TypeOf(component)),
+            .t = name,
             .id = undefined,
         };
 
@@ -161,6 +165,18 @@ pub const ECS = struct {
 
         try e.components.append(c);
         return c;
+    }
+
+    pub fn removeComponentByName(self: *Self, entity: anytype, name: []const u8) !bool {
+        const entityID = self.getID(entity);
+        var e: *Entity = if (self.getEntity(entityID)) |eid| eid else return error.EntityNotFound;
+
+        for (e.components.items) |c| {
+            if (std.mem.eql(u8, c.t, name)) {
+                return try self.remove(e, c);
+            }
+        }
+        return false;
     }
 
     pub fn removeComponent(self: *Self, entity: anytype, comptime TComponent: type) !bool {
@@ -242,6 +258,13 @@ pub const ECS = struct {
         return e.has(TComponent);
     }
 
+    pub fn hasByName(self: *Self, entity: anytype, name: []const u8) bool {
+        const entityID = self.getID(entity);
+        var e = if (self.getEntity(entityID)) |eid| eid else return false;
+
+        return e.hasByName(name);
+    }
+
     /// reference to the component data
     /// this reference can get invalid when adding/removing components so better never store it somewhere
     /// if you wish to have prolonged reference to a particular component use 'Entity.getOne()' to get a 'Component'
@@ -250,6 +273,18 @@ pub const ECS = struct {
         var e = if (self.getEntity(entityID)) |eid| eid else return null;
 
         if (e.getOne(TComponent)) |c| {
+            const address = self.componentData.get(c.t).?;
+            var arr: *std.ArrayList(TComponent) = @intToPtr(*std.ArrayList(TComponent), address);
+            return &arr.items[c.id];
+        }
+        return null;
+    }
+
+    pub fn getOnePtrByName(self: *Self, entity: anytype, comptime TComponent: type, name: []const u8) ?*TComponent {
+        const entityID = self.getID(entity);
+        var e = if (self.getEntity(entityID)) |eid| eid else return null;
+        
+        if (e.getOneByName(name)) |c| {
             const address = self.componentData.get(c.t).?;
             var arr: *std.ArrayList(TComponent) = @intToPtr(*std.ArrayList(TComponent), address);
             return &arr.items[c.id];
@@ -290,7 +325,15 @@ pub const ECS = struct {
                 while (self.iterator.next()) |e| {
                     var matches = true;
                     inline for (types) |t| {
-                        if (!e.has(t)) {
+                        const tInfo = @typeInfo(@TypeOf(t));
+                        const isString = tInfo == .Pointer and (tInfo.Pointer.child == u8 or (@typeInfo(tInfo.Pointer.child) == .Array and @typeInfo(tInfo.Pointer.child).Array.child == u8));
+                        if(isString) {
+                            if (!e.hasByName(t)) {
+                                matches = false;
+                                break;
+                            }
+                        }
+                        else if (!e.has(t)) {
                             matches = false;
                             break;
                         }
@@ -479,29 +522,43 @@ pub const Entity = struct {
     components: std.ArrayList(Component),
 
     pub fn has(self: *@This(), comptime T: type) bool {
+        return self.hasByName(@typeName(T));
+    }
+    pub fn hasByName(self: *@This(), name: []const u8) bool {
         for (self.components.items) |comp| {
-            if (std.mem.eql(u8, comp.t, @typeName(T))) return true;
+            if (std.mem.eql(u8, comp.t, name)) return true;
         }
         return false;
     }
 
     pub fn count(self: *@This(), comptime T: type) usize {
+        return self.countByName(@typeName(T));
+    }
+
+    pub fn countByName(self: *@This(), name: []const u8) usize {
         var amount: usize = 0;
         for (self.components.items) |comp| {
-            if (std.mem.eql(u8, comp.t, @typeName(T))) amount += 1;
+            if (std.mem.eql(u8, comp.t, name)) amount += 1;
         }
         return amount;
     }
 
     pub fn getOne(self: *@This(), comptime T: type) ?Component {
-        // std.debug.print("getOne {?} {?}", .{ self, T });
+        return self.getOneByName(@typeName(T));
+    }
+
+    pub fn getOneByName(self: *@This(), name: []const u8) ?Component {
         for (self.components.items) |*comp| {
-            if (std.mem.eql(u8, comp.t, @typeName(T))) return comp.*;
+            if (std.mem.eql(u8, comp.t, name)) return comp.*;
         }
         return null;
     }
 
-    pub fn getAll(self: *@This(), comptime T: type) EntityComponentIterator(T) {
+    pub fn getAll(self: *@This(), comptime T: type) EntityComponentIterator(@typeName(T)) {
+        return .{ .components = self.components };
+    }
+
+    pub fn getAllByName(self: *@This(), name: []const u8) EntityComponentIterator(name) {
         return .{ .components = self.components };
     }
 
@@ -513,6 +570,10 @@ pub const Entity = struct {
 
     pub fn getData(self: *@This(), ecs: *ECS, comptime T: type) ?*T {
         return ecs.getOnePtr(self, T);
+    }
+   
+    pub fn getDataByName(self: *@This(), ecs: *ECS, comptime T: type, name: []const u8) ?*T {
+        return ecs.getOnePtrByName(self, T, name);
     }
 
     pub fn deinit(self: *@This()) void {
@@ -538,16 +599,16 @@ pub const Component = struct {
     }
 };
 
-pub fn EntityComponentIterator(comptime T: type) type {
+pub fn EntityComponentIterator(name: []const u8) type {
     return struct {
         components: std.ArrayList(Component),
         index: usize = 0,
-        t: []const u8 = @typeName(T),
+        t: []const u8 = name,
         pub fn next(self: *@This()) ?Component {
             while (self.index < self.components.items.len) {
                 defer self.index += 1;
                 const comp = self.components.items[self.index];
-                if (std.mem.eql(u8, comp.t, @typeName(T))) return comp;
+                if (std.mem.eql(u8, comp.t, name)) return comp;
             }
             return null;
         }
