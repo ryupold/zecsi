@@ -6,18 +6,19 @@ pub const Timer = struct {
     repeat: bool,
     time: f32,
 
+    /// move time forward by `dt`
+    /// returns true if `timePassed` reaches `time`
+    /// if this is a `repeat`ing Timer, true is returned and `timePassed` starts from 0 (+overflow) again
     pub fn tick(self: *@This(), dt: f32) bool {
         if (self.time <= 0) return true;
 
-        const before = self.timePassed >= self.time;
         if (self.repeat) {
             self.timePassed += dt;
         } else {
             self.timePassed = std.math.clamp(self.timePassed + dt, 0, self.time);
         }
 
-        const after = self.timePassed >= self.time;
-        if (!before and after) {
+        if (self.timePassed >= self.time) {
             if (self.repeat) self.timePassed = @mod(self.timePassed, self.time);
             return true;
         }
@@ -30,6 +31,7 @@ pub const Timer = struct {
         return std.math.clamp(self.timePassed / self.time, 0, 1);
     }
 
+    /// reset `timePassed` to 0
     pub fn reset(self: *@This()) void {
         self.timePassed = 0;
     }
