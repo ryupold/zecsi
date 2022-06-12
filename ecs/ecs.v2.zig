@@ -2,128 +2,207 @@
 //! https://devlog.hexops.com/2022/lets-build-ecs-part-2-databases/
 
 const std = @import("std");
+const meta = std.meta;
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
-pub const EntityID = u46;
+pub const EntityID = usize;
+pub const ArchetypeHash = u64;
+
+pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
+    comptime var ty = @TypeOf(arch);
+    const isStruct = ty == type;
+    comptime var archLen: usize = 0;
+    comptime if (isStruct) {
+        archLen = @typeInfo(arch).Struct.fields.len;
+        ty = arch;
+    } else {
+        archLen = arch.len;
+    };
+    const tyInfo: std.builtin.Type = @typeInfo(ty);
+    comptime if (tyInfo != .Struct) {
+        compError("expected tuple or Archetype(T), but was {?} ", .{ty});
+    };
+
+    comptime if (!meta.trait.isTuple(ty)) {
+        inline for (tyInfo.Struct.fields) |field| {
+            if (!std.mem.eql(u8, field.name, @typeName(field.field_type))) {
+                //field names must match type names
+                compError("this struct was not created with Archetype(T)", .{});
+            }
+        }
+    };
+
+    var hash: ArchetypeHash = 0;
+    inline for (if (isStruct) @typeInfo(arch).Struct.fields else arch) |TQ| {
+        const T = if (isStruct) TQ.field_type else TQ;
+        const name = @typeName(T);
+        hash ^= std.hash.Wyhash.hash(0, name);
+    }
+
+    return hash;
+}
+
+test "archetypeHash" {
+    try expectEqual(
+        @as(ArchetypeHash, 16681995284927388974),
+        archetypeHash(.{Position}),
+    );
+
+    //same
+    try expectEqual(
+        @as(ArchetypeHash, 8074083904701951711),
+        archetypeHash(.{ Position, Target }),
+    );
+    try expectEqual(
+        @as(ArchetypeHash, 8074083904701951711),
+        archetypeHash(.{ Target, Position }),
+    );
+    //----
+
+    //same
+    try expectEqual(
+        @as(ArchetypeHash, 12484014990812011213),
+        archetypeHash(.{ Target, Position, Name }),
+    );
+    try expectEqual(
+        @as(ArchetypeHash, 12484014990812011213),
+        archetypeHash(.{ Position, Target, Name }),
+    );
+    try expectEqual(
+        @as(ArchetypeHash, 12484014990812011213),
+        archetypeHash(.{ Name, Target, Position }),
+    );
+    //----
+}
+
+fn Archetype(comptime arch: anytype) type {
+    comptime var ty = @TypeOf(arch);
+    const isStruct = ty == type;
+    comptime var archLen: usize = 0;
+    comptime if (isStruct) {
+        archLen = @typeInfo(arch).Struct.fields.len;
+        ty = arch;
+    } else {
+        archLen = arch.len;
+    };
+    const tyInfo: std.builtin.Type = @typeInfo(ty);
+    comptime if (tyInfo != .Struct) {
+        compError("expected tuple or Archetype(T), but was {?} ", .{ty});
+    };
+
+    comptime if (!meta.trait.isTuple(ty)) {
+        inline for (tyInfo.Struct.fields) |field| {
+            if (!std.mem.eql(u8, field.name, @typeName(field.field_type))) {
+                //field names must match type names
+                compError("this struct was not created with Archetype(T)\n\texpected: {1s}: {1s},\n\tactual: {0s}: {1s},", .{ field.name, @typeName(field.field_type) });
+            }
+        }
+        return arch;
+    };
+
+    var structFields: [archLen]std.builtin.Type.StructField = undefined;
+    inline for (if (isStruct) @typeInfo(arch).Struct.fields else arch) |TQ, i| {
+        const T = if (isStruct) TQ.field_type else TQ;
+        @setEvalBranchQuota(10_000);
+        var nameBuf: [4 * 1024]u8 = undefined;
+        structFields[i] = .{
+            .name = std.fmt.bufPrint(&nameBuf, "{s}", .{@typeName(T)}) catch unreachable,
+            .field_type = T,
+            .default_value = null,
+            .is_comptime = false,
+            .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
+        };
+    }
+
+    const lessThan = (struct {
+        pub fn lessThan(_: void, comptime lhs: std.builtin.Type.StructField, comptime rhs: std.builtin.Type.StructField) bool {
+            const smaller = std.math.min(lhs.name.len, rhs.name.len);
+            var i: usize = 0;
+            while (i < smaller) : (i += 1) {
+                if (lhs.name[i] < rhs.name[i]) {
+                    return true;
+                }
+            }
+
+            return lhs.name.len < rhs.name.len;
+        }
+    }).lessThan;
+
+    std.sort.sort(std.builtin.Type.StructField, &structFields, {}, lessThan);
+
+    return @Type(.{
+        .Struct = .{
+            .is_tuple = false,
+            .layout = .Auto,
+            .decls = &.{},
+            .fields = &structFields,
+        },
+    });
+}
+
+test "Archetype with tuples" {
+    const Sone = Archetype(.{Position});
+    var s1: Sone = .{ .Position = Position{ .x = 1, .y = 2 } };
+    try expectEqual(s1.Position, Position{ .x = 1, .y = 2 });
+
+    const Stwo = Archetype(.{ Position, Name, Target });
+    var s2: Stwo = .{
+        .Position = Position{ .x = 1, .y = 2 },
+        .Name = .{ .name = "test" },
+        .Target = .{ .x = 0.5, .y = 10 },
+    };
+    try expectEqual(s2.Position, Position{ .x = 1, .y = 2 });
+    try expectEqual(s2.Target, Target{ .x = 0.5, .y = 10 });
+    try expectEqual(s2.Name, Name{ .name = "test" });
+
+    //// dont compare archetype types like that, use `archetypeHash(a1) == archetypeHash(a2)` instead
+    // try expectEqual(Archetype(.{ Position, Name, Target }), Archetype(.{ Position, Name, Target }));
+    // try expectEqual(Archetype(.{ Position, Name, Target }), Archetype(.{ Name, Position, Target }));
+}
+
+test "Archetype with structs" {
+    const Archetype1 = struct {
+        Position: Position,
+        Target: Target,
+        Name: Name,
+    };
+    const A1 = Archetype(Archetype1);
+
+    try expectEqual(archetypeHash(.{ Position, Target, Name }), archetypeHash(A1));
+    try expectEqual(archetypeHash(.{ Name, Target, Position }), archetypeHash(A1));
+    try expectEqual(archetypeHash(.{ Name, Target, Position }), archetypeHash(Archetype1));
+    try expectEqual(archetypeHash(.{ Position, Target, Name }), archetypeHash(Archetype1));
+
+    //// this will not work as field names must match type names
+    // const NotAnArchetype = struct {
+    //     lol: Position,
+    //     foo: Target,
+    //     bar: Name,
+    // };
+    // _ = Archetype(NotAnArchetype);
+}
+
+pub const ArchetypeEntry = struct {
+    index: usize,
+    storage: ArchetypeHash,
+};
 
 pub const ArchetypeStorage = struct {
     allocator: std.mem.Allocator,
+    hash: ArchetypeHash,
+    data: *anyopaque, //MultiArraylist(Archetype(T))
 
-    /// The hash of every component name in this archetype, i.e. the name of this archetype.
-    hash: u64,
-
-    /// A string hashmap of component_name -> type-erased *ComponentStorage(Component)
-    components: std.StringArrayHashMapUnmanaged(ErasedComponentStorage),
-
-    entity_ids: std.ArrayListUnmanaged(EntityID) = .{},
-
-    pub fn new(this: *@This(), entity: EntityID) !u32 {
-        // Return a new row index
-        const new_row_index = this.entity_ids.items.len;
-        try this.entity_ids.append(this.allocator, entity);
-        return @intCast(u32, new_row_index);
-    }
-
-    pub fn deinit(this: *@This()) void {
-        for (this.components.values()) |erased| {
-            erased.deinit(erased.ptr, this.allocator);
-        }
-        this.entity_ids.deinit(this.allocator);
-        this.components.deinit(this.allocator);
-    }
-
-    pub fn calculateHash(this: *@This()) void {
-        this.hash = 0;
-        var iter = this.components.iterator();
-        while (iter.next()) |entry| {
-            const component_name = entry.key_ptr.*;
-            this.hash ^= std.hash_map.hashString(component_name);
-        }
-    }
-
-    pub fn undoNew(this: *@This()) void {
-        _ = this.entity_ids.pop();
-    }
-
-    pub fn set(this: *@This(), row_index: u32, name: []const u8, component: anytype) !void {
-        var component_storage_erased = this.components.get(name).?;
-        var component_storage = ErasedComponentStorage.cast(component_storage_erased.ptr, @TypeOf(component));
-        try component_storage.set(this.allocator, row_index, component);
-    }
-
-    pub fn remove(this: *@This(), row_index: u32) !void {
-        _ = this.entity_ids.swapRemove(row_index);
-        for (this.components.values()) |component_storage| {
-            component_storage.remove(component_storage.ptr, row_index);
-        }
-    }
-};
-
-pub fn ComponentStorage(comptime TComponent: type) type {
-    return struct {
-        /// A reference to the total number of entities with the same type as is being stored here.
-        total_rows: *usize,
-
-        /// The actual densely stored component data.
-        data: std.ArrayListUnmanaged(TComponent) = .{},
-
-        pub fn deinit(this: *@This(), allocator: Allocator) void {
-            this.data.deinit(allocator);
-        }
-
-        pub fn remove(this: *@This(), row_index: u32) void {
-            if (this.data.items.len > row_index) {
-                _ = this.data.swapRemove(row_index);
-            }
-        }
-
-        pub inline fn copy(dst: *@This(), allocator: Allocator, src_row: u32, dst_row: u32, src: *@This()) !void {
-            try dst.set(allocator, dst_row, src.get(src_row));
-        }
-
-        pub inline fn get(this: @This(), row_index: u32) Component {
-            return storage.data.items[row_index];
-        }
-    };
-}
-
-/// A type-erased representation of ComponentStorage(T) (where T is unknown).
-pub const ErasedComponentStorage = struct {
-    ptr: *anyopaque,
-    deinit: fn (erased: *anyopaque, allocator: Allocator) void,
-    cloneType: fn (erased: @This(), total_entities: *usize, allocator: Allocator, retval: *@This()) error{OutOfMemory}!void,
-    copy: fn (dst_erased: *anyopaque, allocator: Allocator, src_row: u32, dst_row: u32, src_erased: *anyopaque) error{OutOfMemory}!void,
-    remove: fn (erased: *anyopaque, row: u32) void,
-
-    // Casts this `ErasedComponentStorage` into `*ComponentStorage(TComponent)` with the given type
-    // (unsafe).
-    pub fn cast(this: *@This(), comptime TComponent: type) *ComponentStorage(TComponent) {
-        var aligned = @alignCast(@alignOf(*ComponentStorage(TComponent)), this.ptr);
-        return @ptrCast(*ComponentStorage(TComponent), aligned);
-    }
 };
 
 pub const ECS = struct {
     pub const voidArchetype = std.math.maxInt(u64);
 
-    counter: EntityID = 0,
-
     allocator: std.mem.Allocator,
     window: struct { size: struct { x: f32, y: f32 } = .{ .x = 100, .y = 100 } } = .{},
     systems: std.ArrayList(System),
-    archetypes: std.AutoArrayHashMap(u64, ArchetypeStorage),
-
-    /// A mapping of entity IDs (array indices) to where an entity's component values are actually
-    /// stored.
-    entities: std.AutoHashMapUnmanaged(EntityID, Pointer) = .{},
-
-    /// Points to where an entity is stored, specifically in which archetype table and in which row
-    /// of that table.
-    pub const Pointer = struct {
-        archetype_index: u16,
-        row_index: u32,
-    };
+    // enitities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
+    // archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
 
     ///
     pub fn init(
@@ -132,7 +211,8 @@ pub const ECS = struct {
         return @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
-            .archetypes = std.AutoArrayHashMap(u64, ArchetypeStorage).init(allocator),
+            // .enitities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
+            // .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
         };
     }
 
@@ -141,183 +221,6 @@ pub const ECS = struct {
             sys.deinit();
         }
         this.systems.deinit();
-
-        var ait = this.archetypes.iterator();
-        while (ait.next()) |archtype| {
-            archtype.value_ptr.deinit();
-        }
-        this.entities.deinit(this.allocator);
-    }
-
-    /// Returns a new entity.
-    pub fn create(this: *@This()) !EntityID {
-        const new_id = this.counter;
-        this.counter += 1;
-
-        var void_archetype = this.archetypes.getPtr(voidArchetype).?;
-        const new_row = try void_archetype.new(new_id);
-        const void_pointer = Pointer{
-            .archetype_index = 0, // void archetype is guaranteed to be first index
-            .row_index = new_row,
-        };
-
-        this.entities.put(this.allocator, new_id, void_pointer) catch |err| {
-            void_archetype.undoNew();
-            return err;
-        };
-
-        return new_id;
-    }
-
-    pub inline fn archetypeByID(this: *@This(), entity: EntityID) *ArchetypeStorage {
-        const ptr = this.entities.get(entity).?;
-        return &this.archetypes.values()[ptr.archetype_index];
-    }
-
-    pub fn setComponent(this: *@This(), entity: EntityID, name: []const u8, component: anytype) !void {
-        var archetype = this.archetypeByID(entity);
-
-        const old_hash = archetype.hash;
-
-        var have_already = archetype.components.contains(name);
-        const new_hash = if (have_already) old_hash else old_hash ^ std.hash_map.hashString(name);
-
-        var archetype_entry = try this.archetypes.getOrPut(this.allocator, new_hash);
-        if (!archetype_entry.found_existing) {
-            archetype_entry.value_ptr.* = ArchetypeStorage{
-                .allocator = this.allocator,
-                .components = .{},
-                .hash = 0,
-            };
-            var new_archetype = archetype_entry.value_ptr;
-
-            var column_iter = archetype.components.iterator();
-            while (column_iter.next()) |entry| {
-                var erased: ErasedComponentStorage = undefined;
-                entry.value_ptr.cloneType(entry.value_ptr.*, &new_archetype.entity_ids.items.len, this.allocator, &erased) catch |err| {
-                    assert(entities.archetypes.swapRemove(new_hash));
-                    return err;
-                };
-                new_archetype.components.put(this.allocator, entry.key_ptr.*, erased) catch |err| {
-                    assert(entities.archetypes.swapRemove(new_hash));
-                    return err;
-                };
-            }
-
-            // Create storage/column for the new component.
-            const erased = this.initErasedStorage(&new_archetype.entity_ids.items.len, @TypeOf(component)) catch |err| {
-                assert(entities.archetypes.swapRemove(new_hash));
-                return err;
-            };
-            new_archetype.components.put(this.allocator, name, erased) catch |err| {
-                assert(entities.archetypes.swapRemove(new_hash));
-                return err;
-            };
-
-            new_archetype.calculateHash();
-        }
-
-        var current_archetype_storage = archetype_entry.value_ptr;
-
-        //--- just write component data ---
-        if (new_hash == old_hash) {
-            const ptr = this.entities.get(entity).?;
-            try current_archetype_storage.set(ptr.row_index, name, component);
-            return;
-        }
-
-        //---
-
-        const new_row = try current_archetype_storage.new(entity);
-        const old_ptr = this.entities.get(entity).?;
-
-        var column_iter = archetype.components.iterator();
-        while (column_iter.next()) |entry| {
-            var old_component_storage = entry.value_ptr;
-            var new_component_storage = current_archetype_storage.components.get(entry.key_ptr.*).?;
-            new_component_storage.copy(new_component_storage.ptr, this.allocator, new_row, old_ptr.row_index, old_component_storage.ptr) catch |err| {
-                current_archetype_storage.undoNew();
-                return err;
-            };
-        }
-
-        current_archetype_storage.entity_ids.items[new_row] = entity;
-
-        current_archetype_storage.set(new_row, name, component) catch |err| {
-            current_archetype_storage.undoNew();
-            return err;
-        };
-
-        var swapped_entity_id = archetype.entity_ids.items[archetype.entity_ids.items.len - 1];
-        archetype.remove(old_ptr.row_index) catch |err| {
-            current_archetype_storage.undoNew();
-            return err;
-        };
-
-        try this.entities.put(this.allocator, swapped_entity_id, old_ptr);
-
-        try entities.entities.put(entities.allocator, entity, Pointer{
-            .archetype_index = @intCast(u16, archetype_entry.index),
-            .row_index = new_row,
-        });
-        return;
-    }
-
-    pub fn getComponent(this: *@This(), entity: EntityID, name: []const u8, comptime Component: type) ?Component {
-        var archetype = this.archetypeByID(entity);
-
-        var component_storage_erased = archetype.components.get(name) orelse return null;
-
-        const ptr = this.entities.get(entity).?;
-        var component_storage = component_storage_erased.cast(Component);
-        return component_storage.get(ptr.row_index);
-    }
-
-    fn initErasedStorage(
-        self: *@This(),
-        /// why is this a pointer?
-        total_rows: *usize,
-        comptime Component: type,
-    ) !ErasedComponentStorage {
-        var new_ptr = try self.allocator.create(ComponentStorage(Component));
-        new_ptr.* = ComponentStorage(Component){ .total_rows = total_rows };
-
-        return ErasedComponentStorage{
-            .ptr = new_ptr,
-
-            .deinit = (struct {
-                pub fn deinit(erased: *anyopaque, allocator: Allocator) void {
-                    var ptr = ErasedComponentStorage.cast(erased, Component);
-                    ptr.deinit(allocator);
-                    allocator.destroy(ptr);
-                }
-            }).deinit,
-
-            .cloneType = (struct {
-                pub fn cloneType(erased: ErasedComponentStorage, _total_rows: *usize, allocator: Allocator, retval: *ErasedComponentStorage) !void {
-                    var new_clone = try allocator.create(ComponentStorage(Component));
-                    new_clone.* = ComponentStorage(Component){ .total_rows = _total_rows };
-                    var tmp = erased;
-                    tmp.ptr = new_clone;
-                    retval.* = tmp;
-                }
-            }).cloneType,
-
-            .copy = (struct {
-                pub fn copy(dst_erased: *anyopaque, allocator: Allocator, src_row: u32, dst_row: u32, src_erased: *anyopaque) !void {
-                    var dst = ErasedComponentStorage.cast(dst_erased, Component);
-                    var src = ErasedComponentStorage.cast(src_erased, Component);
-                    return dst.copy(allocator, src_row, dst_row, src);
-                }
-            }).copy,
-
-            .remove = (struct {
-                pub fn remove(erased: *anyopaque, row: u32) void {
-                    var ptr = ErasedComponentStorage.cast(erased, Component);
-                    ptr.remove(row);
-                }
-            }).remove,
-        };
     }
 
     //=== Systems =================================================================================
@@ -487,7 +390,6 @@ pub fn typeId(comptime T: type) usize {
     return @ptrToInt(&H.byte);
 }
 
-
 fn compError(comptime fmt: []const u8, args: anytype) noreturn {
     @compileError(std.fmt.comptimePrint(fmt, args));
 }
@@ -508,22 +410,6 @@ const Name = struct { name: []const u8 };
 test "create ecs" {
     var ecs = try ECS.init(t.allocator);
     defer ecs.deinit();
-}
-
-test "create entity" {
-    var ecs = try ECS.init(t.allocator);
-    defer ecs.deinit();
-
-    var player = try ecs.create();
-    const Location = struct {
-        x: f32 = 0,
-        y: f32 = 0,
-        z: f32 = 0,
-    };
-
-    try ecs.setComponent(player, "Name", "jane"); // add Name component
-    try ecs.setComponent(player, "Location", Location{}); // add Location component
-    try ecs.setComponent(player, "Name", "joe"); // update Name component
 }
 
 const ExampleSystem = struct {
