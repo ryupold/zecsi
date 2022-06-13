@@ -1,3 +1,4 @@
+//! inspired by:
 //! https://devlog.hexops.com/2022/lets-build-ecs-part-1/
 //! https://devlog.hexops.com/2022/lets-build-ecs-part-2-databases/
 
@@ -6,12 +7,13 @@ const meta = std.meta;
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
+pub const voidArchetype: u64 = 0;
 pub const EntityID = usize;
-pub const ArchetypeHash = u64;
+const ArchetypeHash = u64;
 
 pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
     comptime var ty = @TypeOf(arch);
-    const isStruct = ty == type;
+    const isStruct = ty == type or @typeInfo(ty) == .Struct;
     comptime var archLen: usize = 0;
     comptime if (isStruct) {
         archLen = @typeInfo(arch).Struct.fields.len;
@@ -19,6 +21,11 @@ pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
     } else {
         archLen = arch.len;
     };
+
+    if (archLen == 0) {
+        return voidArchetype;
+    }
+
     const tyInfo: std.builtin.Type = @typeInfo(ty);
     comptime if (tyInfo != .Struct) {
         compError("expected tuple or Archetype(T), but was {?} ", .{ty});
@@ -98,7 +105,6 @@ fn Archetype(comptime arch: anytype) type {
                 compError("this struct was not created with Archetype(T)\n\texpected: {1s}: {1s},\n\tactual: {0s}: {1s},", .{ field.name, @typeName(field.field_type) });
             }
         }
-        return arch;
     };
 
     var structFields: [archLen]std.builtin.Type.StructField = undefined;
@@ -108,7 +114,7 @@ fn Archetype(comptime arch: anytype) type {
         var nameBuf: [4 * 1024]u8 = undefined;
         structFields[i] = .{
             .name = std.fmt.bufPrint(&nameBuf, "{s}", .{@typeName(T)}) catch unreachable,
-            .field_type = T,
+            .field_type = *T,
             .default_value = null,
             .is_comptime = false,
             .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
@@ -169,10 +175,17 @@ test "Archetype with structs" {
     };
     const A1 = Archetype(Archetype1);
 
+    const a1: Archetype1 = .{
+        .Position = .{ .x = 0, .y = 0 },
+        .Target = .{ .x = 0, .y = 0 },
+        .Name = .{ .name = "" },
+    };
+
     try expectEqual(archetypeHash(.{ Position, Target, Name }), archetypeHash(A1));
     try expectEqual(archetypeHash(.{ Name, Target, Position }), archetypeHash(A1));
     try expectEqual(archetypeHash(.{ Name, Target, Position }), archetypeHash(Archetype1));
     try expectEqual(archetypeHash(.{ Position, Target, Name }), archetypeHash(Archetype1));
+    try expectEqual(archetypeHash(A1), archetypeHash(a1));
 
     //// this will not work as field names must match type names
     // const NotAnArchetype = struct {
@@ -183,26 +196,130 @@ test "Archetype with structs" {
     // _ = Archetype(NotAnArchetype);
 }
 
-pub const ArchetypeEntry = struct {
-    index: usize,
+const ArchetypeEntry = struct {
     storage: ArchetypeHash,
+    index: usize,
 };
 
-pub const ArchetypeStorage = struct {
+const ArchetypeStorage = struct {
+    const Self = @This();
     allocator: std.mem.Allocator,
     hash: ArchetypeHash,
-    data: *anyopaque, //MultiArraylist(Archetype(T))
+    len: usize = 0,
 
+    entities: std.AutoArrayHashMap(EntityID, usize),
+    data: std.AutoArrayHashMap(usize, *anyopaque),
+    _addEntry: fn (this: *Self) anyerror!usize,
+    _removeEntry: fn (this: *Self, index: usize) void,
+
+    pub fn init(allocator: std.mem.Allocator, comptime arch: anytype) !Self {
+        var data = std.AutoArrayHashMap(usize, *anyopaque).init(allocator);
+
+        inline for (arch) |T| {
+            var list = try allocator.create(std.ArrayList(T));
+            list.* = std.ArrayList(T).init(allocator);
+
+            data.put(typeId(T), @ptrCast(*anyopaque, list));
+        }
+
+        return Self{
+            .allocator = allocator,
+            .data = data,
+            ._addEntry = (struct {
+                pub fn addEntry(this: *Self, entity: EntityID) !usize {
+                    inline for (arch) |T| {
+                        var listPtr = this.data.getPtr(typeId(T)).?;
+                        var list = @ptrCast(*std.ArrayList(T), listPtr);
+                        _ = try list.addOne();
+                        errdefer list.swapRemove(list.items.len - 1);
+                    }
+                    const index = this.len;
+                    try this.entities.put(entity, index);
+                    this.len += 1;
+                    return index;
+                }
+            }).addEntry,
+            ._removeEntry = (struct {
+                pub fn removeEntry(this: *Self, index: usize) void {
+                    const lastIndex = this.len - 1;
+                    inline for (arch) |T| {
+                        var listPtr = this.data.getPtr(typeId(T)).?;
+                        var list = @ptrCast(*std.ArrayList(T), listPtr);
+                        list.swapRemove(index);
+                    }
+                    var indices = this.entities.values();
+                    for (indices) |*i| {
+                        if (i.* == lastIndex) {
+                            i.* = index;
+                            break;
+                        }
+                    }
+                    this.len -= 1;
+                }
+            }).removeEntry,
+        };
+    }
+
+    pub fn has(this: *Self, comptime TComponent: type) bool {
+        return this.data.contains(typeId(TComponent));
+    }
+
+    /// always check first, with `has`, if this storage really contains components of type `TComponent`
+    pub fn slice(this: *Self, comptime TComponent: type) []TComponent {
+        var ptr = this.data.getPtr(typeId(TComponent));
+        var list = @ptrCast(*std.ArrayList(TComponent), ptr);
+        return list.items;
+    }
+
+    // pub fn query(this: *Self, arch: anytype) ArchetypeIterator(Archetype(arch)) {
+    //     //TODO: implement query
+    // }
+
+    pub fn insert(this: *Self, entity: anytype) !Archetype(entity) {
+        const info: std.builtin.Type = @typeInfo(@TypeOf(entity));
+        if (info != .Struct) compError("entity is not in Archetype(T) format", .{});
+
+        const index = try this.addEntry();
+        var arch = Archetype(entity);
+
+        inline for (info.Struct.fields) |field| {
+            const fieldInfo = @typeInfo(field.field_type);
+            const isArchetypeField = fieldInfo == .Pointer and std.mem.eql(u8, field.name, @typeName(field.field_type));
+            if (!isArchetypeField) continue;
+            const typeKey = typeId(fieldInfo.Pointer.child);
+            if (this.data.getPtr(typeKey)) |listPtr| {
+                var list = @ptrCast(*std.ArrayList(fieldInfo.Pointer.child), listPtr);
+                list.items[index] = @field(entity, field.name).*;
+                @field(arch, field.name) = &list.items[index];
+            }
+        }
+        return arch;
+    }
+
+    pub fn remove(this: *Self, index: usize) void {
+        this.removeEntry(index);
+    }
 };
 
-pub const ECS = struct {
-    pub const voidArchetype = std.math.maxInt(u64);
+//TODO: implement iterator that jumps to next archetype
+// pub fn ArchetypeIterator(comptime A: type) type {
+//     return struct {};
+// }
 
+test "query" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    // var it = ecs.query(.{ Position, Name });
+}
+
+pub const ECS = struct {
     allocator: std.mem.Allocator,
     window: struct { size: struct { x: f32, y: f32 } = .{ .x = 100, .y = 100 } } = .{},
     systems: std.ArrayList(System),
-    // enitities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
-    // archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
+    nextEnitityID: EntityID = 1,
+    enitities: std.AutoArrayHashMap(EntityID, *ArchetypeStorage),
+    archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
 
     ///
     pub fn init(
@@ -211,8 +328,8 @@ pub const ECS = struct {
         return @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
-            // .enitities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
-            // .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
+            .enitities = std.AutoArrayHashMap(EntityID, ArchetypeEntry).init(allocator),
+            .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
         };
     }
 
@@ -221,7 +338,30 @@ pub const ECS = struct {
             sys.deinit();
         }
         this.systems.deinit();
+
+        for (this.archetypes.values()) |*storage| {
+            storage.deinit();
+        }
+        this.archetypes.deinit();
+
+        this.enitities.deinit();
     }
+
+    //=== Entity ==================================================================================
+    pub fn create(this: *@This(), archetype: anytype) !EntityID {
+        var entry = try this.archetypes.getOrPut(archetypeHash(archetype));
+        errdefer this.archetypes.swapRemove(entry.key_ptr.*);
+        const id = this.nextEnitityID;
+        this.nextEnitityID += 1;
+
+        if (!entry.found_existing) {
+            entry.value_ptr.* = try ArchetypeStorage.init(this.allocator, archetype);
+        }
+
+        return id;
+    }
+
+    //=== Component ===============================================================================
 
     //=== Systems =================================================================================
 
