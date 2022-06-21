@@ -10,6 +10,7 @@ const EntityID = @import("entity.zig").EntityID;
 const storage = @import("archetype_storage.zig");
 const ArchetypeHash = storage.ArchetypeHash;
 const archetypeHash = storage.archetypeHash;
+const combineArchetypeHash = storage.combineArchetypeHash;
 const ArchetypeStorage = storage.ArchetypeStorage;
 const ArchetypeEntry = storage.ArchetypeEntry;
 const ArchetypeSlices = storage.ArchetypeSlices;
@@ -22,6 +23,7 @@ pub const ECS = struct {
     nextEnitityID: EntityID = 1,
     enitities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
     archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
+    addedArchetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -31,6 +33,7 @@ pub const ECS = struct {
             .systems = std.ArrayList(System).init(allocator),
             .enitities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
             .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
+            .addedArchetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
         };
 
         //initialize with void archetype where all new entities will be placed
@@ -50,6 +53,11 @@ pub const ECS = struct {
         }
         this.archetypes.deinit();
 
+        for (this.addedArchetypes.values()) |*archetypeStorage| {
+            archetypeStorage.deinit();
+        }
+        this.addedArchetypes.deinit();
+
         this.enitities.deinit();
     }
 
@@ -58,13 +66,55 @@ pub const ECS = struct {
         const id = this.nextEnitityID;
 
         var voidStorage = this.archetypes.getPtr(archetypeHash(.{})).?;
-        try voidStorage.copy(id, voidStorage);
+        try voidStorage.copy(id, voidStorage.*);
 
         this.nextEnitityID += 1;
         return id;
     }
 
+    /// sync all added and removed data from temp storage to real
+    /// this is called usually after each frame (after all before, update, after, ui steps).
+    fn syncArchetypes(this: *@This()) !void {
+        for (this.archetypes.values()) |*archetype| {
+            try archetype.sync();
+        }
+    }
+
     //=== Component ===============================================================================
+
+    pub fn put(this: *@This(), entity: EntityID, component: anytype) !void {
+        if (this.enitities.get(entity)) |oldHash| {
+            if (this.archetypes.getPtr(oldHash)) |oldStorage| {
+                oldStorage.put(entity, component) catch |err|
+                    switch (err) {
+                    // entity did not have this component before
+                    error.ComponentNotPartOfArchetype => {
+                        const newHash = combineArchetypeHash(oldStorage.hash, .{@TypeOf(component)});
+
+                        //storage already exists
+                        if (this.archetypes.getPtr(newHash)) |newStorage| {
+                            // move entity to this storage
+                            try newStorage.copy(entity, oldStorage.*);
+                            try oldStorage.delete(entity);
+                        }
+                        //storage is new, but already created in this frame
+                        else if (this.addedArchetypes.getPtr(newHash)) |newStorage| {
+                            try newStorage.copy(entity, oldStorage.*);
+                            try oldStorage.delete(entity);
+                        }
+                        //storage for this archetype does not exist yet
+                        else {
+                            //TODO: implement way to extend an archetype storage by one new type
+                            try this.addedArchetypes.put(newHash, ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component)));
+                        }
+                    },
+                    error.EntityNotFound => error.EntityNotFound,
+                };
+            }
+        } else {
+            return error.EntityNotFound;
+        }
+    }
 
     //=== Systems =================================================================================
 
@@ -186,6 +236,8 @@ pub const ECS = struct {
         for (self.systems.items) |*system| {
             try system.ui(dt);
         }
+
+        try self.syncArchetypes();
     }
 };
 
@@ -238,6 +290,33 @@ const expectEqualStrings = t.expectEqualStrings;
 test "create ecs" {
     var ecs = try ECS.init(t.allocator);
     defer ecs.deinit();
+}
+
+test "create entity" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    const entity1 = try ecs.create();
+    const entity2 = try ecs.create();
+
+    try expectEqual(@as(EntityID, 1), entity1);
+    try expectEqual(@as(EntityID, 2), entity2);
+
+    try ecs.update(0.1); // causes sync of archetype storages
+
+    try expectEqual(@as(EntityID, 1), ecs.archetypes.values()[0].entities()[0]);
+    try expectEqual(@as(EntityID, 2), ecs.archetypes.values()[0].entities()[1]);
+}
+
+test "create add component (put new component type, not previously present in the entities' storage)" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    const entity = try ecs.create();
+
+    try ecs.update(0); // causes sync of archetype storages
+
+    _ = entity;
 }
 
 const ExampleSystem = struct {

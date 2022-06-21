@@ -73,6 +73,9 @@ pub const ArchetypeStorage = struct {
                 }
             }).addToVoid else (struct {
                 pub fn addEntry(this: *Self, entity: EntityID, previousStorage: ArchetypeStorage) !void {
+                    //do nothing if it's the same storage
+                    if (this.hash == previousStorage.hash) return;
+
                     //find index of entity in previous archetype
                     var index = previousStorage.entityIndexMap.get(entity);
                     // if it was added in this frame, it is held in the addedData container of previousStorage
@@ -105,7 +108,7 @@ pub const ArchetypeStorage = struct {
                         } else {
                             //this case only occurs if we are stepping up to a greater archetype
                             //add entry to component list which previousStorage hadn't
-                            _ = try list.addOne(); //TODO: put new component data in here
+                            _ = try list.addOne(); // component data needs to be set via `put`
                         }
                     }
                     // add entity to added list
@@ -370,13 +373,39 @@ pub const ArchetypeStorage = struct {
 };
 
 test "ArchetypeStorage init" {
-    var sut = try ArchetypeStorage.init(t.allocator, .{}); //void archetype
+    var sut = try ArchetypeStorage.init(t.allocator, .{ Position, Name }); //void archetype
+    defer sut.deinit();
 
-    try t.expectEqual(@as(usize, 0), sut.addedData.count());
-    try t.expectEqual(@as(usize, 0), sut.data.count());
+    try t.expectEqual(@as(usize, 2), sut.data.keys().len);
+    try t.expectEqual(@as(usize, 2), sut.addedData.keys().len);
     try t.expectEqual(@as(usize, 0), sut.removedEntities.count());
     try t.expectEqual(@as(usize, 0), sut.entityIDRow.items.len);
     try t.expectEqual(@as(usize, 0), sut.entityIndexMap.count());
+}
+
+test "ArchetypeStorage extend" {
+    // var voidArch = try ArchetypeStorage.init(t.allocator, .{}); //void archetype
+    // defer voidArch.deinit();
+    // var positionNameArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name }); //void archetype
+    // defer positionNameArch.deinit();
+
+    // const entity1: EntityID = 1;
+    // const entity2: EntityID = 2;
+    // try voidArch.copy(entity1, voidArch);
+    // try voidArch.copy(entity2, voidArch);
+
+    // try positionNameArch.copy(entity1, voidArch);
+    // try positionNameArch.put(entity1, Position{ .x = 1, .y = 2 });
+    // try positionNameArch.put(entity1, Name{ .name = "foo" });
+    // try positionNameArch.copy(entity2, voidArch);
+    // try positionNameArch.put(entity2, Position{ .x = 2, .y = 4 });
+    // try positionNameArch.put(entity2, Name{ .name = "bar" });
+
+    // var extension = try sut.extend(.{Target});
+    // defer extension.deinit();
+
+    // try extension.copy(entity1, positionNameArch);
+    // try extension.put(entity1, Target{ .x = 5, .y = 10 });
 }
 
 test "ArchetypeStorage add to {}" {
@@ -680,7 +709,7 @@ pub fn typeId(comptime T: type) usize {
 
 pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
     const ty = @TypeOf(arch);
-    const tyInfo: std.builtin.Type = @typeInfo(ty);
+    const tyInfo = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
         compError("expected tuple of types but got {?}", .{arch});
     };
@@ -697,11 +726,23 @@ pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
 
     var hash: ArchetypeHash = 0;
     inline for (arch) |T| {
-        const name = @typeName(T);
-        hash ^= std.hash.Wyhash.hash(0, name);
+        const bytes = std.mem.toBytes(typeId(T));
+        hash ^= std.hash.Wyhash.hash(0, &bytes);
     }
 
     return hash;
+}
+
+pub fn combineArchetypeHash(hash: ArchetypeHash, comptime arch: anytype) ArchetypeHash {
+    if (arch.len == 0) return hash;
+
+    var newHash: ArchetypeHash = hash;
+    inline for (arch) |T| {
+        const bytes = std.mem.toBytes(typeId(T));
+        newHash ^= std.hash.Wyhash.hash(0, &bytes);
+    }
+
+    return newHash;
 }
 
 test "archetypeHash" {
@@ -711,42 +752,70 @@ test "archetypeHash" {
         archetypeHash(.{}),
     );
 
-    try expectEqual(
-        @as(ArchetypeHash, 17445124584265813536),
-        archetypeHash(.{Position}),
-    );
+    try expect(archetypeHash(.{Position}) != archetypeHash(.{}));
+    try expect(archetypeHash(.{Position}) != archetypeHash(.{ Target, Position }));
 
     //same
     try expectEqual(
-        @as(ArchetypeHash, 7542237148096717762),
-        archetypeHash(.{ Position, Target }),
-    );
-    try expectEqual(
-        @as(ArchetypeHash, 7542237148096717762),
         archetypeHash(.{ Target, Position }),
+        archetypeHash(.{ Position, Target }),
     );
     //----
 
     //same
     try expectEqual(
-        @as(ArchetypeHash, 1452300763375007119),
+        archetypeHash(.{ Position, Target, Name }),
         archetypeHash(.{ Target, Position, Name }),
     );
     try expectEqual(
-        @as(ArchetypeHash, 1452300763375007119),
+        archetypeHash(.{ Name, Target, Position }),
         archetypeHash(.{ Position, Target, Name }),
     );
     try expectEqual(
-        @as(ArchetypeHash, 1452300763375007119),
+        archetypeHash(.{ Target, Position, Name }),
         archetypeHash(.{ Name, Target, Position }),
     );
     //----
 }
 
+test "combineArchetypeHash" {
+    try expectEqual(
+        @as(ArchetypeHash, std.math.maxInt(u64)),
+        combineArchetypeHash(std.math.maxInt(u64), .{}),
+    );
+
+    try expectEqual(
+        archetypeHash(.{Position}),
+        combineArchetypeHash(archetypeHash(.{Position}), .{}),
+    );
+
+    try expectEqual(
+        archetypeHash(.{ Position, Target }),
+        combineArchetypeHash(archetypeHash(.{Position}), .{Target}),
+    );
+
+    try expectEqual(
+        archetypeHash(.{ Position, Target, Name }),
+        combineArchetypeHash(archetypeHash(.{ Position, Name }), .{Target}),
+    );
+    try expectEqual(
+        archetypeHash(.{ Position, Target, Name }),
+        combineArchetypeHash(archetypeHash(.{ Target, Name }), .{Position}),
+    );
+    try expectEqual(
+        archetypeHash(.{ Position, Target, Name }),
+        combineArchetypeHash(archetypeHash(.{ Target, Position }), .{Name}),
+    );
+    try expectEqual(
+        archetypeHash(.{ Position, Target, Name }),
+        combineArchetypeHash(archetypeHash(.{Name}), .{ Target, Position }),
+    );
+}
+
 pub fn ArchetypeEntry(comptime arch: anytype) type {
     @setEvalBranchQuota(10_000);
     const ty = @TypeOf(arch);
-    const tyInfo: std.builtin.Type = @typeInfo(ty);
+    const tyInfo = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
         compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
     };
@@ -760,7 +829,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
         };
     }
 
-    var structFields: [arch.len + 1]std.builtin.Type.StructField = undefined;
+    var structFields: [arch.len + 1]std.builtin.TypeInfo.StructField = undefined;
     structFields[0] = .{
         .name = "entity",
         .field_type = EntityID,
@@ -805,7 +874,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
 pub fn ArchetypeSlices(comptime arch: anytype) type {
     @setEvalBranchQuota(10_000);
     const ty = @TypeOf(arch);
-    const tyInfo: std.builtin.Type = @typeInfo(ty);
+    const tyInfo = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
         compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
     };
@@ -819,7 +888,7 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
         };
     }
 
-    var structFields: [arch.len + 1]std.builtin.Type.StructField = undefined;
+    var structFields: [arch.len + 1]std.builtin.TypeInfo.StructField = undefined;
     structFields[0] = .{
         .name = "entities",
         .field_type = []EntityID,
