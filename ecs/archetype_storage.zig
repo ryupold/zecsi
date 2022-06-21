@@ -5,11 +5,10 @@ const expect = t.expect;
 const expectEqual = t.expectEqual;
 const expectEqualStrings = t.expectEqualStrings;
 
-pub const EntityID = usize;
-pub const voidArchetype: u64 = std.math.maxInt(u64);
-const ArchetypeHash = u64;
+const EntityID = @import("entity.zig").EntityID;
+pub const ArchetypeHash = u64;
 
-const ArchetypeStorage = struct {
+pub const ArchetypeStorage = struct {
     const Self = @This();
     allocator: std.mem.Allocator,
     hash: ArchetypeHash,
@@ -346,16 +345,16 @@ const ArchetypeStorage = struct {
     ///
     /// example:
     /// ```
-    /// var slices = try storage.query(.{Position, Name});
+    /// var slices = try storage.query(.{.{"position", Position}, .{"name", Name}});
     /// for(slices.data.entities) |entity, index| {
     ///     _ = entity;               // EntityID
-    ///     _ = slices.data.Position; // []Position
-    ///     _ = slices.data.Name;     // []Name
+    ///     _ = slices.data.position; // []Position
+    ///     _ = slices.data.name;     // []Name
     ///
     ///     var entry = slices.get(index) catch unreachable;
     ///     _ = entry.entity;   // EntityID
-    ///     _ = entry.Position; // *Position
-    ///     _ = entry.Name;     // *Name
+    ///     _ = entry.position; // *Position
+    ///     _ = entry.name;     // *Name
     /// }
     ///
     /// ```
@@ -363,19 +362,12 @@ const ArchetypeStorage = struct {
         var slices: ArchetypeSlices(arch) = undefined;
         slices.data.entities = this.entities();
 
-        inline for (arch) |TComponent| {
-            @field(slices.data, @typeName(TComponent)) = try this.slice(TComponent);
+        inline for (arch) |lT| {
+            @field(slices.data, lT[0]) = try this.slice(lT[1]);
         }
         return slices;
     }
 };
-
-//=== components used in unit tests ===================
-const Position = struct { x: f32, y: f32 };
-const Target = struct { x: f32, y: f32 };
-const Name = struct { name: []const u8 };
-const Dunno = struct { label: []const u8, wtf: i32 };
-//=====================================================
 
 test "ArchetypeStorage init" {
     var sut = try ArchetypeStorage.init(t.allocator, .{}); //void archetype
@@ -594,24 +586,31 @@ test "ArchetypeStorage query (ArchetypeSlices)" {
     }
     try testArch.sync();
 
-    var allComponents = try testArch.query(.{ Position, Name, Target });
+    var allComponents = try testArch.query(.{
+        .{ "position", Position },
+        .{ "name", Name },
+        .{ "target", Target },
+    });
     try expectEqual(allComponents.data.entities.len, 4);
-    try expectEqual(allComponents.data.Position.len, 4);
-    try expectEqual(allComponents.data.Name.len, 4);
-    try expectEqual(allComponents.data.Target.len, 4);
-    try expectEqual(Position{ .x = 1, .y = 2 }, allComponents.data.Position[1]);
-    try expectEqual(Name{ .name = "lorizzle" }, allComponents.data.Name[1]);
-    try expectEqual(Target{ .x = 3, .y = 4 }, allComponents.data.Target[1]);
+    try expectEqual(allComponents.data.position.len, 4);
+    try expectEqual(allComponents.data.name.len, 4);
+    try expectEqual(allComponents.data.target.len, 4);
+    try expectEqual(Position{ .x = 1, .y = 2 }, allComponents.data.position[1]);
+    try expectEqual(Name{ .name = "lorizzle" }, allComponents.data.name[1]);
+    try expectEqual(Target{ .x = 3, .y = 4 }, allComponents.data.target[1]);
 
     //direct access to the memory
-    allComponents.data.Position[1] = .{ .x = 111, .y = 222 };
+    allComponents.data.position[1] = .{ .x = 111, .y = 222 };
 
     // query subset of components
-    var positions = try testArch.query(.{Position});
-    try expectEqual(Position{ .x = 111, .y = 222 }, positions.data.Position[1]);
+    var positions = try testArch.query(.{.{ "position", Position }});
+    try expectEqual(Position{ .x = 111, .y = 222 }, positions.data.position[1]);
 
     // query component that is not present in archetype
-    try t.expectError(error.ComponentNotPartOfArchetype, testArch.query(.{ Position, Dunno }));
+    try t.expectError(error.ComponentNotPartOfArchetype, testArch.query(.{
+        .{ "position", Position },
+        .{ "dunno", Dunno },
+    }));
 }
 
 test "ArchetypeStorage query (ArchetypeEntry)" {
@@ -641,27 +640,31 @@ test "ArchetypeStorage query (ArchetypeEntry)" {
     }
     try testArch.sync();
 
-    var allComponents = try testArch.query(.{ Position, Name, Target });
-    const entry0 = allComponents.get(0) catch unreachable;
-    const entry1 = allComponents.get(1) catch unreachable;
-    const entry2 = allComponents.get(2) catch unreachable;
-    const entry3 = allComponents.get(3) catch unreachable;
+    var allComponents = try testArch.query(.{
+        .{ "pos", Position },
+        .{ "name", Name },
+        .{ "target", Target },
+    });
+    const entry0 = allComponents.get(0).?;
+    const entry1 = allComponents.get(1).?;
+    const entry2 = allComponents.get(2).?;
+    const entry3 = allComponents.get(3).?;
 
-    try expectEqual(Position{ .x = 0, .y = 0 }, entry0.Position.*);
+    try expectEqual(Position{ .x = 0, .y = 0 }, entry0.pos.*);
 
-    try expectEqual(Position{ .x = 1, .y = 2 }, entry1.Position.*);
-    try expectEqual(Name{ .name = "lorizzle" }, entry1.Name.*);
-    try expectEqual(Target{ .x = 3, .y = 4 }, entry1.Target.*);
+    try expectEqual(Position{ .x = 1, .y = 2 }, entry1.pos.*);
+    try expectEqual(Name{ .name = "lorizzle" }, entry1.name.*);
+    try expectEqual(Target{ .x = 3, .y = 4 }, entry1.target.*);
 
-    try expectEqual(Position{ .x = 2, .y = 4 }, entry2.Position.*);
-    try expectEqual(Name{ .name = "lorizzle" }, entry2.Name.*);
-    try expectEqual(Target{ .x = 6, .y = 8 }, entry2.Target.*);
+    try expectEqual(Position{ .x = 2, .y = 4 }, entry2.pos.*);
+    try expectEqual(Name{ .name = "lorizzle" }, entry2.name.*);
+    try expectEqual(Target{ .x = 6, .y = 8 }, entry2.target.*);
 
-    try expectEqual(Position{ .x = 3, .y = 6 }, entry3.Position.*);
-    try expectEqual(Name{ .name = "lorizzle" }, entry3.Name.*);
-    try expectEqual(Target{ .x = 9, .y = 12 }, entry3.Target.*);
+    try expectEqual(Position{ .x = 3, .y = 6 }, entry3.pos.*);
+    try expectEqual(Name{ .name = "lorizzle" }, entry3.name.*);
+    try expectEqual(Target{ .x = 9, .y = 12 }, entry3.target.*);
 
-    try t.expectError(error.IndexOutOfBounds, allComponents.get(4));
+    try t.expect(allComponents.get(4) == null);
 }
 
 /// get usize id for a given type (magic)
@@ -683,7 +686,7 @@ pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
     };
 
     if (arch.len == 0) {
-        return voidArchetype;
+        return std.math.maxInt(u64);
     }
 
     inline for (tyInfo.Struct.fields) |field| {
@@ -709,52 +712,52 @@ test "archetypeHash" {
     );
 
     try expectEqual(
-        @as(ArchetypeHash, 16681995284927388974),
+        @as(ArchetypeHash, 17445124584265813536),
         archetypeHash(.{Position}),
     );
 
     //same
     try expectEqual(
-        @as(ArchetypeHash, 8074083904701951711),
+        @as(ArchetypeHash, 7542237148096717762),
         archetypeHash(.{ Position, Target }),
     );
     try expectEqual(
-        @as(ArchetypeHash, 8074083904701951711),
+        @as(ArchetypeHash, 7542237148096717762),
         archetypeHash(.{ Target, Position }),
     );
     //----
 
     //same
     try expectEqual(
-        @as(ArchetypeHash, 12484014990812011213),
+        @as(ArchetypeHash, 1452300763375007119),
         archetypeHash(.{ Target, Position, Name }),
     );
     try expectEqual(
-        @as(ArchetypeHash, 12484014990812011213),
+        @as(ArchetypeHash, 1452300763375007119),
         archetypeHash(.{ Position, Target, Name }),
     );
     try expectEqual(
-        @as(ArchetypeHash, 12484014990812011213),
+        @as(ArchetypeHash, 1452300763375007119),
         archetypeHash(.{ Name, Target, Position }),
     );
     //----
 }
 
-fn ArchetypeEntry(comptime arch: anytype) type {
+pub fn ArchetypeEntry(comptime arch: anytype) type {
+    @setEvalBranchQuota(10_000);
     const ty = @TypeOf(arch);
     const tyInfo: std.builtin.Type = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
-        compError("expected tuple of types but got {?}", .{arch});
+        compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
     };
 
-    if (arch.len == 0) {
-        return voidArchetype;
-    }
-
-    inline for (tyInfo.Struct.fields) |field| {
-        if (@TypeOf(field.field_type) != type) {
-            compError("expected tuple of types but got {?}", .{arch});
-        }
+    inline for (tyInfo.Struct.fields) |field, i| {
+        comptime if (!meta.trait.isTuple(field.field_type)) {
+            compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+        };
+        comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {
+            compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+        };
     }
 
     var structFields: [arch.len + 1]std.builtin.Type.StructField = undefined;
@@ -765,15 +768,14 @@ fn ArchetypeEntry(comptime arch: anytype) type {
         .is_comptime = false,
         .alignment = @alignOf(EntityID),
     };
-    inline for (arch) |T, i| {
+    inline for (arch) |lT, i| {
         @setEvalBranchQuota(10_000);
-        var nameBuf: [4 * 1024]u8 = undefined;
         structFields[i + 1] = .{
-            .name = std.fmt.bufPrint(&nameBuf, "{s}", .{@typeName(T)}) catch unreachable,
-            .field_type = *T,
+            .name = lT[0],
+            .field_type = *lT[1],
             .default_value = null,
             .is_comptime = false,
-            .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
+            .alignment = if (@sizeOf(lT[1]) > 0) @alignOf(lT[1]) else 0,
         };
     }
 
@@ -790,32 +792,31 @@ fn ArchetypeEntry(comptime arch: anytype) type {
 /// Return struct in which all data for an archetype `query` can fit
 ///
 /// ```
-/// const Slices = ArchetypeSlices(.{Position, Name});
+/// const Slices = ArchetypeSlices(.{.{"position", Position}, .{"name", Name}});
 /// // would be equvalent to:
 /// struct{
 ///     data: struct {
 ///       entities: []EntityID,
-///       Position: []Position,
-///       Name: []Name,
+///       position: []Position,
+///       name: []Name,
 ///   }
 /// }
 /// ```
-fn ArchetypeSlices(comptime arch: anytype) type {
+pub fn ArchetypeSlices(comptime arch: anytype) type {
     @setEvalBranchQuota(10_000);
     const ty = @TypeOf(arch);
     const tyInfo: std.builtin.Type = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
-        compError("expected tuple of types but got {?}", .{arch});
+        compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
     };
 
-    if (arch.len == 0) {
-        return voidArchetype;
-    }
-
-    inline for (tyInfo.Struct.fields) |field| {
-        if (@TypeOf(field.field_type) != type) {
-            compError("expected tuple of types but got {?}", .{arch});
-        }
+    inline for (tyInfo.Struct.fields) |field, i| {
+        comptime if (!meta.trait.isTuple(field.field_type)) {
+            compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+        };
+        comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {
+            compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+        };
     }
 
     var structFields: [arch.len + 1]std.builtin.Type.StructField = undefined;
@@ -827,14 +828,13 @@ fn ArchetypeSlices(comptime arch: anytype) type {
         .alignment = @alignOf([]EntityID),
     };
 
-    inline for (arch) |T, i| {
-        var nameBuf: [4 * 1024]u8 = undefined;
+    inline for (arch) |lT, i| {
         structFields[i + 1] = .{
-            .name = std.fmt.bufPrint(&nameBuf, "{s}", .{@typeName(T)}) catch unreachable,
-            .field_type = []T,
+            .name = lT[0],
+            .field_type = []lT[1],
             .default_value = null,
             .is_comptime = false,
-            .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
+            .alignment = if (@sizeOf(lT[1]) > 0) @alignOf(lT[1]) else 0,
         };
     }
 
@@ -850,14 +850,14 @@ fn ArchetypeSlices(comptime arch: anytype) type {
             },
         }),
 
-        pub fn get(this: *@This(), index: usize) error{IndexOutOfBounds}!ArchetypeEntry(arch) {
-            if (index >= this.data.entities.len) return error.IndexOutOfBounds;
+        pub fn get(this: *@This(), index: usize) ?ArchetypeEntry(arch) {
+            if (index >= this.data.entities.len) return null;
 
             var entry: ArchetypeEntry(arch) = undefined;
 
             entry.entity = this.data.entities[index];
-            inline for (arch) |TComponent| {
-                @field(entry, @typeName(TComponent)) = &@field(this.data, @typeName(TComponent))[index];
+            inline for (arch) |lT| {
+                @field(entry, lT[0]) = &@field(this.data, lT[0])[index];
             }
 
             return entry;
@@ -869,6 +869,13 @@ fn ArchetypeSlices(comptime arch: anytype) type {
     };
 }
 
-fn compError(comptime fmt: []const u8, args: anytype) noreturn {
+inline fn compError(comptime fmt: []const u8, args: anytype) noreturn {
     @compileError(std.fmt.comptimePrint(fmt, args));
 }
+
+//=== components used in unit tests ==================
+const Position = struct { x: f32, y: f32 };
+const Target = struct { x: f32, y: f32 };
+const Name = struct { name: []const u8 };
+const Dunno = struct { label: []const u8, wtf: i32 };
+//====================================================

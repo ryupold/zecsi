@@ -6,34 +6,15 @@ const std = @import("std");
 const meta = std.meta;
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
-const EntityID = @import("entity.zig");
-const ArchetypeHash = @import("archetype_storage.zig").ArchetypeHash;
-const ArchetypeStorage = @import("archetype_storage.zig").ArchetypeStorage;
+const EntityID = @import("entity.zig").EntityID;
+const storage = @import("archetype_storage.zig");
+const ArchetypeHash = storage.ArchetypeHash;
+const archetypeHash = storage.archetypeHash;
+const ArchetypeStorage = storage.ArchetypeStorage;
+const ArchetypeEntry = storage.ArchetypeEntry;
+const ArchetypeSlices = storage.ArchetypeSlices;
 
-
-
-///TODO: implement iterator that jumps to next archetype
-// pub fn ArchetypeIterator(comptime ArchetypeTuple: type) type {
-//     return struct {
-//         ecs: *ECS,
-//         currentHashIndex: usize,
-//         currentData: ArchetypeSlices(ArchetypeTuple),
-//         indexInStorage: usize,
-
-//         pub fn next(this: *@This()) ?ArchetypePointers(ArchetypeTuple) {
-//             //TODO:
-//             // std.AutoHashMap(ArchetypeHash, ArchetypeStorage).valueIterator(self: *const Self)
-//         }
-//     };
-// }
-
-// test "query" {
-//     var ecs = try ECS.init(t.allocator);
-//     defer ecs.deinit();
-
-//     // var it = ecs.query(.{ Position, Name });
-// }
-
+/// V2 ECS with archetype storages for different component combinations
 pub const ECS = struct {
     allocator: std.mem.Allocator,
     window: struct { size: struct { x: f32, y: f32 } = .{ .x = 100, .y = 100 } } = .{},
@@ -42,16 +23,20 @@ pub const ECS = struct {
     enitities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
     archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
 
-    ///
     pub fn init(
         allocator: std.mem.Allocator,
     ) !@This() {
-        return @This(){
+        var ecs = @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
             .enitities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
             .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
         };
+
+        //initialize with void archetype where all new entities will be placed
+        try ecs.archetypes.put(archetypeHash(.{}), try ArchetypeStorage.init(allocator, .{}));
+
+        return ecs;
     }
 
     pub fn deinit(this: *@This()) void {
@@ -60,8 +45,8 @@ pub const ECS = struct {
         }
         this.systems.deinit();
 
-        for (this.archetypes.values()) |*storage| {
-            storage.deinit();
+        for (this.archetypes.values()) |*archetypeStorage| {
+            archetypeStorage.deinit();
         }
         this.archetypes.deinit();
 
@@ -69,16 +54,13 @@ pub const ECS = struct {
     }
 
     //=== Entity ==================================================================================
-    pub fn create(this: *@This(), archetype: anytype) !EntityID {
-        var entry = try this.archetypes.getOrPut(archetypeHash(archetype));
-        errdefer this.archetypes.swapRemove(entry.key_ptr.*);
+    pub fn create(this: *@This()) !EntityID {
         const id = this.nextEnitityID;
+
+        var voidStorage = this.archetypes.getPtr(archetypeHash(.{})).?;
+        try voidStorage.copy(id, voidStorage);
+
         this.nextEnitityID += 1;
-
-        if (!entry.found_existing) {
-            entry.value_ptr.* = try ArchetypeStorage.init(this.allocator, archetype);
-        }
-
         return id;
     }
 
@@ -253,10 +235,6 @@ const expect = t.expect;
 const expectEqual = t.expectEqual;
 const expectEqualStrings = t.expectEqualStrings;
 
-const Position = struct { x: f32, y: f32 };
-const Target = struct { x: f32, y: f32 };
-const Name = struct { name: []const u8 };
-
 test "create ecs" {
     var ecs = try ECS.init(t.allocator);
     defer ecs.deinit();
@@ -374,3 +352,10 @@ test "ECS.update calls before on all systems, then update on all systems and at 
     try expectEqual(sut.updateCalls, 2);
     try expectEqual(sut.afterCalls, 2);
 }
+
+//=== components used in unit tests ==================
+const Position = struct { x: f32, y: f32 };
+const Target = struct { x: f32, y: f32 };
+const Name = struct { name: []const u8 };
+const Dunno = struct { label: []const u8, wtf: i32 };
+//====================================================
