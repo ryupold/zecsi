@@ -117,6 +117,7 @@ pub const ECS = struct {
                         else {
                             var newArchetype = try ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component));
                             _ = try newArchetype.copyFromOldArchetype(entity, oldStorage.*);
+                            try newArchetype.put(entity, component);
                             try this.addedArchetypes.put(newHash, newArchetype);
                         }
                         try this.enitities.put(entity, newHash);
@@ -127,6 +128,21 @@ pub const ECS = struct {
         } else {
             return error.EntityNotFound;
         }
+    }
+
+    pub fn get(this: *@This(), entity: EntityID, comptime TComponent: type) ?TComponent {
+        if (this.enitities.get(entity)) |hash| {
+            if (this.archetypes.get(hash) orelse this.addedArchetypes.get(hash)) |archStorage| {
+                return archStorage.get(entity, TComponent) catch |err| {
+                    std.debug.panic("ECS.get({d}, {s}) -> {?}", .{ entity, @typeName(TComponent), err });
+                };
+            } else if (builtin.mode == .Debug) {
+                std.debug.panic("Entity #{d} does not exist in any archetype storage (hash invalid)", .{entity});
+            }
+        } else if (builtin.mode == .Debug) {
+            std.debug.panic("Entity #{d} does not exist", .{entity});
+        }
+        return null;
     }
 
     //=== Systems =================================================================================
@@ -362,6 +378,26 @@ test "syncArchetypes" {
 
     try expectEqual(ecs.enitities.get(entity1).?, archetypeHash(.{ Position, Name }));
     try expectEqual(ecs.enitities.get(entity2).?, archetypeHash(.{Position}));
+}
+
+test "get component data from entity" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    const entity = try ecs.create();
+
+    try ecs.put(entity, Position{ .x = 1, .y = 2 });
+    try ecs.put(entity, Name{ .name = "foobar" });
+
+    // get before sync
+    try expectEqual(Position{ .x = 1, .y = 2 }, ecs.get(entity, Position).?);
+    try expectEqual(Name{ .name = "foobar" }, ecs.get(entity, Name).?);
+
+    try ecs.syncArchetypes();
+
+    // and after sync
+    try expectEqual(Position{ .x = 1, .y = 2 }, ecs.get(entity, Position).?);
+    try expectEqual(Name{ .name = "foobar" }, ecs.get(entity, Name).?);
 }
 
 const ExampleSystem = struct {
