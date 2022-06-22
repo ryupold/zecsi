@@ -7,7 +7,7 @@ const expectEqualStrings = t.expectEqualStrings;
 
 const EntityID = @import("entity.zig").EntityID;
 pub const ArchetypeHash = u64;
-/// obtained with `typeID()`
+/// obtained with `typeId()`
 const ComponentType = usize;
 
 /// type erased archetype data column storing one type of component
@@ -19,6 +19,7 @@ const ArchetypeColumn = struct {
     _append: fn (this: *@This()) std.mem.Allocator.Error!usize,
     _copyFrom: fn (this: *@This(), from: *@This(), fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize,
     _remove: fn (this: *@This(), index: usize) void,
+    _clear: fn (this: *@This()) void,
     _deinit: fn (this: *@This()) void,
 
     /// create a column for components of type `TComponent`
@@ -52,6 +53,13 @@ const ArchetypeColumn = struct {
                     column.len = list.items.len;
                 }
             }).remove,
+            ._clear = (struct {
+                fn clear(column: *ArchetypeColumn) void {
+                    var list = column.cast(TComponent) catch unreachable;
+                    list.clearAndFree();
+                    column.len = 0;
+                }
+            }).clear,
             ._deinit = (struct {
                 fn deinit(column: *ArchetypeColumn) void {
                     var list = column.cast(TComponent) catch unreachable;
@@ -104,6 +112,11 @@ const ArchetypeColumn = struct {
         this._remove(this, index);
     }
 
+    /// remove all entries in this column
+    pub fn clear(this: *@This()) void {
+        this._clear(this);
+    }
+
     /// append new entry to this column by copying data `from` other column at `fromIndex`
     pub fn copyFrom(this: *@This(), from: *@This(), fromIndex: usize) !usize {
         return try this._copyFrom(this, from, fromIndex);
@@ -128,190 +141,21 @@ pub const ArchetypeStorage = struct {
     data: std.AutoArrayHashMap(ComponentType, ArchetypeColumn),
     addedData: std.AutoArrayHashMap(ComponentType, ArchetypeColumn),
 
-    // _addEntry: fn (this: *@This(), entity: EntityID, previousStorage: ArchetypeStorage) anyerror!void,
-    // _removeEntry: fn (this: *@This(), entity: EntityID) anyerror!void,
-    // _sync: fn (this: *@This()) anyerror!void,
-    // _deinit: fn (this: *@This()) void,
-
     pub fn init(
         allocator: std.mem.Allocator,
-        // , comptime arch: anytype
     ) !@This() {
-        // const hash = archetypeHash(arch);
         var data = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
         var addedData = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
         var removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator);
 
-        // inline for (arch) |T| {
-        //     var list = try allocator.create(std.ArrayList(T));
-        //     list.* = std.ArrayList(T).init(allocator);
-        //     try data.put(typeId(T), @ptrCast(*anyopaque, list));
-
-        //     var addedList = try allocator.create(std.ArrayList(T));
-        //     addedList.* = std.ArrayList(T).init(allocator);
-        //     try addedData.put(typeId(T), @ptrCast(*anyopaque, addedList));
-        // }
-
         return @This(){
             .allocator = allocator,
-            // .hash = hash,
             .data = data,
             .addedData = addedData,
             .entityIndexMap = std.AutoArrayHashMap(EntityID, usize).init(allocator),
             .entityIDs = std.ArrayList(EntityID).init(allocator),
             .addedEntityIDs = std.ArrayList(EntityID).init(allocator),
             .removedEntities = removedEntities,
-
-            // ._addEntry = if (arch.len == 0) (struct {
-            //     pub fn addToVoid(this: *ArchetypeStorage, entity: EntityID, previousStorage: ArchetypeStorage) !void {
-            //         //find index of entity in previous archetype
-            //         var index = previousStorage.entityIndexMap.get(entity);
-            //         // if it was added in this frame, it is held in the addedData container of previousStorage
-            //         const isVolatile = index == null;
-            //         if (isVolatile) {
-            //             for (previousStorage.addedEntityIDs.items) |aE, i| {
-            //                 if (aE == entity) {
-            //                     index = i;
-            //                     break;
-            //                 }
-            //             }
-            //         }
-            //         if (index != null) return;
-
-            //         // add entity to added list
-            //         try this.addedEntityIDs.append(entity);
-            //     }
-            // }).addToVoid else (struct {
-            //     pub fn addEntry(this: *ArchetypeStorage, entity: EntityID, previousStorage: ArchetypeStorage) !void {
-            //         //do nothing if it's the same storage
-            //         if (this.hash == previousStorage.hash) return;
-
-            //         //find index of entity in previous archetype
-            //         var index = previousStorage.entityIndexMap.get(entity);
-            //         // if it was added in this frame, it is held in the addedData container of previousStorage
-            //         const isVolatile = index == null;
-            //         if (isVolatile) {
-            //             for (previousStorage.addedEntityIDs.items) |aE, i| {
-            //                 if (aE == entity) {
-            //                     index = i;
-            //                     break;
-            //                 }
-            //             }
-            //         }
-            //         if (index == null) return error.EntityNotFound;
-
-            //         //find correct storage
-            //         var dataStorage = if (isVolatile)
-            //             previousStorage.addedData
-            //         else
-            //             previousStorage.data;
-
-            //         //for each component type
-            //         inline for (arch) |T| {
-            //             // if previos archetype contained this component
-            //             var listPtr = this.addedData.get(typeId(T)).?;
-            //             var list = castColumn(T, listPtr);
-            //             if (dataStorage.get(typeId(T))) |previousListPtr| {
-            //                 var previousList = castColumn(T, previousListPtr);
-            //                 // add component to added list
-            //                 try list.append(previousList.items[index.?]);
-            //             } else {
-            //                 //this case only occurs if we are stepping up to a greater archetype
-            //                 //add entry to component list which previousStorage hadn't
-            //                 _ = try list.addOne(); // component data needs to be set via `put`
-            //             }
-            //         }
-            //         // add entity to added list
-            //         try this.addedEntityIDs.append(entity);
-            //     }
-            // }).addEntry,
-            // ._removeEntry = (struct {
-            //     pub fn removeEntry(this: *ArchetypeStorage, entity: EntityID) !void {
-            //         //is entity in "persistent" storage?
-            //         var index = this.entityIndexMap.get(entity);
-            //         const isVolatile = index == null;
-
-            //         // is entity in temp storage?
-            //         if (index == null) {
-            //             for (this.addedEntityIDs.items) |aE, i| {
-            //                 if (aE == entity) {
-            //                     index = i;
-            //                     break;
-            //                 }
-            //             }
-            //         }
-            //         if (index == null) return error.EntityNotFound;
-
-            //         //if the storage contains the entity to remove in the temp data
-            //         if (isVolatile) {
-            //             //delete the entry before it gets synced
-            //             inline for (arch) |T| {
-            //                 var listPtr = this.addedData.get(typeId(T)).?;
-            //                 var list = castColumn(T, listPtr);
-            //                 _ = list.swapRemove(index.?);
-            //             }
-            //             _ = this.addedEntityIDs.swapRemove(index.?);
-            //         } else {
-            //             //otherwise add to removed list
-            //             try this.removedEntities.put(entity, {});
-            //         }
-            //     }
-            // }).removeEntry,
-            // ._sync = (struct {
-            //     pub fn sync(this: *ArchetypeStorage) !void {
-            //         //add
-            //         inline for (arch) |T| {
-            //             var addedListPtr = this.addedData.get(typeId(T)).?;
-            //             var addedList = castColumn(T, addedListPtr);
-
-            //             var listPtr = this.data.get(typeId(T)).?;
-            //             var list = castColumn(T, listPtr);
-
-            //             try list.appendSlice(addedList.items);
-            //             addedList.clearAndFree();
-            //         }
-            //         for (this.addedEntityIDs.items) |aE| {
-            //             const index = this.entityIDs.items.len;
-            //             try this.entityIDs.append(aE);
-            //             try this.entityIndexMap.put(aE, index);
-            //         }
-            //         this.addedEntityIDs.clearAndFree();
-
-            //         //remove
-            //         for (this.removedEntities.keys()) |removed| {
-            //             if (this.entityIndexMap.get(removed)) |index| {
-            //                 inline for (arch) |T| {
-            //                     var listPtr = this.data.get(typeId(T)).?;
-            //                     var list = castColumn(T, listPtr);
-
-            //                     _ = list.swapRemove(index);
-            //                 }
-            //                 _ = this.entityIDs.swapRemove(index);
-            //                 if (this.entityIDs.items.len > 0 and index < this.entityIDs.items.len - 1) {
-            //                     const swappedEntity = this.entityIDs.items[index];
-            //                     try this.entityIndexMap.put(swappedEntity, index);
-            //                 }
-            //             }
-            //             _ = this.entityIndexMap.swapRemove(removed);
-            //         }
-            //         this.removedEntities.clearAndFree();
-            //     }
-            // }).sync,
-            // ._deinit = (struct {
-            //     pub fn deinit(this: *ArchetypeStorage) void {
-            //         inline for (arch) |T| {
-            //             var listPtr = this.data.get(typeId(T)).?;
-            //             var list = castColumn(T, listPtr);
-            //             list.deinit();
-            //             this.allocator.destroy(list);
-
-            //             var addedListPtr = this.addedData.get(typeId(T)).?;
-            //             var addedList = castColumn(T, addedListPtr);
-            //             addedList.deinit();
-            //             this.allocator.destroy(addedList);
-            //         }
-            //     }
-            // }).deinit,
         };
     }
 
@@ -331,8 +175,6 @@ pub const ArchetypeStorage = struct {
     }
 
     pub fn deinit(this: *@This()) void {
-        // this._deinit(this);
-
         for (this.data.values()) |*column| {
             column.deinit();
         }
@@ -340,18 +182,13 @@ pub const ArchetypeStorage = struct {
             column.deinit();
         }
 
-        this.entityIndexMap.deinit();
-        this.entityIDs.deinit();
         this.data.deinit();
         this.addedData.deinit();
         this.addedEntityIDs.deinit();
         this.removedEntities.deinit();
+        this.entityIDs.deinit();
+        this.entityIndexMap.deinit();
     }
-
-    // /// cast pointer to Component column
-    // fn castColumn(comptime T: type, ptr: *anyopaque) *std.ArrayList(T) {
-    //     return @ptrCast(*std.ArrayList(T), @alignCast(@alignOf(*std.ArrayList(T)), ptr));
-    // }
 
     /// put component data for specified entity
     /// ```
@@ -415,7 +252,7 @@ pub const ArchetypeStorage = struct {
         return error.ComponentNotPartOfArchetype;
     }
 
-    /// get component data
+    /// get component data copy
     pub fn get(this: @This(), entity: EntityID, comptime T: type) !T {
         const ref = try this.getPtr(entity, T);
         return ref.*;
@@ -442,7 +279,7 @@ pub const ArchetypeStorage = struct {
     }
 
     /// create a new entry for existing entity and copy all data from previous Storage
-    fn copyFromOldArchetype(this: *@This(), entity: EntityID, oldStorage: ArchetypeStorage) !usize {
+    pub fn copyFromOldArchetype(this: *@This(), entity: EntityID, oldStorage: ArchetypeStorage) !usize {
         if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
 
         const index = this.addedEntityIDs.items.len;
@@ -494,7 +331,7 @@ pub const ArchetypeStorage = struct {
     }
 
     /// add a new entity with given components (tuple) to this storage
-    fn newEntity(this: *@This(), entity: EntityID) !usize {
+    pub fn newEntity(this: *@This(), entity: EntityID) !usize {
         if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
 
         const index = this.addedEntityIDs.items.len;
@@ -559,7 +396,9 @@ pub const ArchetypeStorage = struct {
                 _ = try column.copyFrom(kv.value_ptr, i);
             }
         }
-        this.addedData.clearAndFree();
+        for(this.addedData.values()) |*column| {
+            column.clear();
+        }
 
         //=== remove ====
         for (this.removedEntities.keys()) |removed| {
@@ -631,31 +470,6 @@ test "ArchetypeStorage init" {
     try t.expectEqual(@as(usize, 0), sut.removedEntities.count());
     try t.expectEqual(@as(usize, 0), sut.entityIDs.items.len);
     try t.expectEqual(@as(usize, 0), sut.entityIndexMap.count());
-}
-
-test "ArchetypeStorage extend" {
-    // var voidArch = try ArchetypeStorage.init(t.allocator, .{}); //void archetype
-    // defer voidArch.deinit();
-    // var positionNameArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name }); //void archetype
-    // defer positionNameArch.deinit();
-
-    // const entity1: EntityID = 1;
-    // const entity2: EntityID = 2;
-    // try voidArch.copy(entity1, voidArch);
-    // try voidArch.copy(entity2, voidArch);
-
-    // try positionNameArch.copy(entity1, voidArch);
-    // try positionNameArch.put(entity1, Position{ .x = 1, .y = 2 });
-    // try positionNameArch.put(entity1, Name{ .name = "foo" });
-    // try positionNameArch.copy(entity2, voidArch);
-    // try positionNameArch.put(entity2, Position{ .x = 2, .y = 4 });
-    // try positionNameArch.put(entity2, Name{ .name = "bar" });
-
-    // var extension = try sut.extend(.{Target});
-    // defer extension.deinit();
-
-    // try extension.copy(entity1, positionNameArch);
-    // try extension.put(entity1, Target{ .x = 5, .y = 10 });
 }
 
 test "ArchetypeStorage add to {}" {

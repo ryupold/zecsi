@@ -66,7 +66,7 @@ pub const ECS = struct {
         const id = this.nextEnitityID;
 
         var voidStorage = this.archetypes.getPtr(archetypeHash(.{})).?;
-        _ = try voidStorage.add(id, .{});
+        _ = try voidStorage.newEntity(id);
 
         this.nextEnitityID += 1;
         return id;
