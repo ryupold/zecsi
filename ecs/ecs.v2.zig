@@ -81,6 +81,13 @@ pub const ECS = struct {
         for (this.archetypes.values()) |*archetype| {
             try archetype.sync();
         }
+
+        var it = this.addedArchetypes.iterator();
+        while (it.next()) |kv| {
+            try kv.value_ptr.sync();
+            try this.archetypes.putNoClobber(kv.key_ptr.*, kv.value_ptr.*);
+        }
+        this.addedArchetypes.clearAndFree();
     }
 
     //=== Component ===============================================================================
@@ -93,7 +100,7 @@ pub const ECS = struct {
                     switch (err) {
                     // entity did not have this component before
                     error.ComponentNotPartOfArchetype => {
-                        const newHash = combineArchetypeHash(oldStorage.hash, .{@TypeOf(component)});
+                        const newHash = combineArchetypeHash(oldHash, @TypeOf(component));
                         //after adding to new archetype, delete from old
                         defer oldStorage.delete(entity) catch unreachable;
 
@@ -111,8 +118,8 @@ pub const ECS = struct {
                             var newArchetype = try ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component));
                             _ = try newArchetype.copyFromOldArchetype(entity, oldStorage.*);
                             try this.addedArchetypes.put(newHash, newArchetype);
-                            try this.enitities.put(entity, newHash);
                         }
+                        try this.enitities.put(entity, newHash);
                     },
                     else => return err,
                 };
@@ -325,20 +332,36 @@ test "put new component type, not previously present in the entities' storage" {
     try ecs.put(entity, Position{ .x = 1, .y = 2 });
     // there should be an additional archetype in addedArchetypes
     try expectEqual(@as(usize, 1), ecs.addedArchetypes.count());
+    try expectEqual(archetypeHash(.{Position}), ecs.addedArchetypes.keys()[0]);
 
     try ecs.put(entity, Name{ .name = "foobar" });
     try expectEqual(@as(usize, 2), ecs.addedArchetypes.count());
 }
 
-test "create add component (put new component type, not previously present in the entities' storage)" {
+test "syncArchetypes" {
     var ecs = try ECS.init(t.allocator);
     defer ecs.deinit();
 
-    const entity = try ecs.create();
+    const entity1 = try ecs.create();
+    const entity2 = try ecs.create();
 
-    try ecs.update(0); // causes sync of archetype storages
+    try ecs.put(entity1, Position{ .x = 1, .y = 2 });
+    try ecs.put(entity1, Name{ .name = "foobar" });
+    try ecs.put(entity2, Position{ .x = 1, .y = 2 });
+    try expectEqual(@as(usize, 1), ecs.archetypes.count());
+    try expectEqual(@as(usize, 2), ecs.addedArchetypes.count());
 
-    _ = entity;
+    try ecs.syncArchetypes();
+
+    try expectEqual(@as(usize, 0), ecs.addedArchetypes.count());
+    // all archetypes created along the way
+    try expectEqual(@as(usize, 3), ecs.archetypes.count());
+    try expectEqual(archetypeHash(.{}), ecs.archetypes.keys()[0]);
+    try expectEqual(archetypeHash(.{Position}), ecs.archetypes.keys()[1]);
+    try expectEqual(archetypeHash(.{ Position, Name }), ecs.archetypes.keys()[2]);
+
+    try expectEqual(ecs.enitities.get(entity1).?, archetypeHash(.{ Position, Name }));
+    try expectEqual(ecs.enitities.get(entity2).?, archetypeHash(.{Position}));
 }
 
 const ExampleSystem = struct {

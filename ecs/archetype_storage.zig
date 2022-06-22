@@ -809,14 +809,15 @@ test "ArchetypeStorage query (ArchetypeEntry)" {
 /// get usize id for a given type (magic)
 /// typeId implementation by Felix "xq" Queißner
 /// from: https://zig.news/xq/cool-zig-patterns-type-identifier-3mfd
-pub fn typeId(component: anytype) ComponentType {
-    if (@TypeOf(component) != type) return typeId(@TypeOf(component));
-    _ = component;
+pub fn typeId(comptime T: type) ComponentType {
+    _ = T;
     const H = struct {
         var byte: u8 = 0;
     };
     return @ptrToInt(&H.byte);
 }
+
+const voidArchetypeHash: ArchetypeHash = std.math.maxInt(u64);
 
 pub fn archetypeHash(arch: anytype) ArchetypeHash {
     if (@TypeOf(arch) == type) return archetypeHash(.{arch});
@@ -828,7 +829,7 @@ pub fn archetypeHash(arch: anytype) ArchetypeHash {
     };
 
     if (arch.len == 0) {
-        return std.math.maxInt(u64);
+        return voidArchetypeHash;
     }
 
     inline for (tyInfo.Struct.fields) |field| {
@@ -849,6 +850,7 @@ pub fn archetypeHash(arch: anytype) ArchetypeHash {
 pub fn combineArchetypeHash(hash: ArchetypeHash, arch: anytype) ArchetypeHash {
     if (@TypeOf(arch) == type) return combineArchetypeHash(hash, .{arch});
     if (arch.len == 0) return hash;
+    if (hash == voidArchetypeHash) return archetypeHash(arch);
 
     var newHash: ArchetypeHash = hash;
     inline for (arch) |T| {
@@ -894,8 +896,8 @@ test "archetypeHash" {
 
 test "combineArchetypeHash" {
     try expectEqual(
-        @as(ArchetypeHash, std.math.maxInt(u64)),
-        combineArchetypeHash(std.math.maxInt(u64), .{}),
+        voidArchetypeHash,
+        combineArchetypeHash(voidArchetypeHash, .{}),
     );
 
     try expectEqual(
@@ -906,6 +908,11 @@ test "combineArchetypeHash" {
     try expectEqual(
         archetypeHash(.{ Position, Target }),
         combineArchetypeHash(archetypeHash(.{Position}), .{Target}),
+    );
+
+    try expectEqual(
+        archetypeHash(.{ Position, Target }),
+        combineArchetypeHash(combineArchetypeHash(archetypeHash(.{}), .{Position}), .{Target}),
     );
 
     try expectEqual(
