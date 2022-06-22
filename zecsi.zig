@@ -1,9 +1,8 @@
-const _ecs = @import("ecs/ecs.zig");
+const _ecs = @import("ecs/ecs.v2.zig");
 pub const ECS = _ecs.ECS;
 pub const Entity = _ecs.Entity;
 pub const EntityID = _ecs.EntityID;
-pub const Component = _ecs.Component;
-pub const EntityComponentIterator = _ecs.EntityComponentIterator;
+pub const ArchetypeIterator = _ecs.ArchetypeIterator;
 
 pub const game = @import("game.zig");
 

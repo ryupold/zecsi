@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = @import("log.zig");
 const raylib = @import("raylib/raylib.zig");
-const _ecs = @import("ecs/ecs.zig");
+const _ecs = @import("ecs/ecs.v2.zig");
 pub const ECS = _ecs.ECS;
 
 const Self = @This();
@@ -36,7 +36,7 @@ pub fn init(alloc: Allocator, c: GameConfig) !void {
     Self.allocator = alloc;
 
     ecs = try allocator.create(ECS);
-    ecs.* = try _ecs.ECS.init(allocator, allocator);
+    ecs.* = try _ecs.ECS.init(allocator);
     ecsInitialized = true;
     if (ecsInitialized) {
         ecs.window.size.x = @intToFloat(f32, screenWidth);

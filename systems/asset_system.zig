@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const ECS = @import("../ecs/ecs.zig").ECS;
+const ECS = @import("../ecs/ecs.v2.zig").ECS;
 const r = @import("../raylib/raylib.zig");
 const log = @import("../log.zig");
 const assets = @import("../assets.zig");

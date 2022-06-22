@@ -1,11 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const log = @import("../log.zig");
-const _ecs = @import("../ecs/ecs.zig");
+const _ecs = @import("../ecs/ecs.v2.zig");
 const r = @import("../raylib/raylib.zig");
 const ECS = _ecs.ECS;
-const Entity = _ecs.Entity;
-const Component = _ecs.Component;
+const EntityID = _ecs.EntityID;
 const vouch = @import("../utils.zig").vouch;
 const ignore = @import("../utils.zig").ignore;
 
@@ -34,33 +33,31 @@ pub const TwoFingerZoomAndDrag = struct {
     _startFingerPositions: ?struct { a: r.Vector2, b: r.Vector2 } = null,
 };
 
-var _camera: ?Component = null;
+var _camera: EntityID = 0;
 var _ecsInstance: ?*ECS = null;
 
 pub const CameraSystem = struct {
     pub const Self = @This();
     ecs: *ECS,
     camera: _ecs.EntityID,
-    ///just saving this ref for quicker reference
-    camRef: Component,
 
     pub fn init(ecs: *ECS) !Self {
-        const cam = try ecs.createWithCapacity(5);
+        const cam = try ecs.create();
+        try ecs.put(cam, r.Camera2D{
+            .target = r.Vector2.zero(),
+            .offset = .{
+                .x = ecs.window.size.x / 2,
+                .y = ecs.window.size.y / 2,
+            },
+        });
         var system = Self{
             .ecs = ecs,
-            .camera = cam.id,
-            .camRef = try ecs.add(cam, r.Camera2D{
-                .target = r.Vector2.zero(),
-                .offset = .{
-                    .x = ecs.window.size.x / 2,
-                    .y = ecs.window.size.y / 2,
-                },
-            }),
+            .camera = cam,
         };
 
-        std.debug.print("Camera entity: {?}", .{cam});
+        std.debug.print("Camera entity: {d}", .{cam});
 
-        _camera = system.camRef;
+        _camera = cam;
         _ecsInstance = ecs;
 
         return system;
@@ -69,7 +66,7 @@ pub const CameraSystem = struct {
     pub fn deinit(_: *@This()) void {}
 
     pub fn before(self: *Self, _: f32) !void {
-        var cam = self.ecs.getPtr(r.Camera2D, self.camRef).?;
+        var cam = self.ecs.getPtr(self.camera, r.Camera2D).?;
         cam.offset.x = self.ecs.window.size.x / 2;
         cam.offset.y = self.ecs.window.size.y / 2;
 
@@ -84,7 +81,7 @@ pub const CameraSystem = struct {
     pub fn update(_: *Self, _: f32) !void {}
 
     fn applyMouseDrag(self: *Self, cam: *r.Camera2D) void {
-        if (self.ecs.getOnePtr(self.camera, CameraMouseDrag)) |onDrag| {
+        if (self.ecs.getPtr(self.camera, CameraMouseDrag)) |onDrag| {
             if (r.IsMouseButtonPressed(onDrag.button)) {
                 const mousePos = r.GetMousePosition(); //self.screenToWorld(r.GetMousePosition());
                 onDrag._dragStart = mousePos;
@@ -108,14 +105,14 @@ pub const CameraSystem = struct {
             else => r.GetMouseWheelMove(),
         };
         if (wheelMove != 0) {
-            if (self.ecs.getOnePtr(self.camera, CameraScrollZoom)) |onScroll| {
+            if (self.ecs.getPtr(self.camera, CameraScrollZoom)) |onScroll| {
                 cam.zoom = std.math.clamp((cam.zoom + wheelMove * onScroll.factor * cam.zoom), 0.1, 1000);
             }
         }
     }
 
     fn applyTouchDragAndZoom(self: *Self, cam: *r.Camera2D) void {
-        if (self.ecs.getOnePtr(self.camera, TwoFingerZoomAndDrag)) |onTwoFingers| {
+        if (self.ecs.getPtr(self.camera, TwoFingerZoomAndDrag)) |onTwoFingers| {
             if (r.GetTouchPointCount() == 2) {
                 const a = r.GetTouchPosition(0);
                 const b = r.GetTouchPosition(1);
@@ -145,7 +142,7 @@ pub const CameraSystem = struct {
     }
 
     fn applyWASDMovement(self: *Self, cam: *r.Camera2D) void {
-        if (self.ecs.getOnePtr(self.camera, CameraWASD)) |wasd| {
+        if (self.ecs.getPtr(self.camera, CameraWASD)) |wasd| {
             if (r.IsKeyDown(wasd.up)) {
                 cam.target = cam.target.add(.{ .x = 0, .y = -wasd.speed });
             }
@@ -163,13 +160,13 @@ pub const CameraSystem = struct {
 
     /// transform a (x,y) screen coordinates to a world position
     pub fn screenToWorld(self: Self, screenPos: r.Vector2) r.Vector2 {
-        const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?.*;
+        const cam = self.ecs.get(self.camera, r.Camera2D).?;
         return r.GetScreenToWorld2D(screenPos, cam);
     }
 
     /// transform a (x,y) world position to screen coordinates
     pub fn worldToScreen(self: Self, worldPos: r.Vector2) r.Vector2 {
-        const cam = self.ecs.getPtr(r.Camera2D, self.camRef).?.*;
+        const cam = self.ecs.get(self.camera, r.Camera2D).?;
         return r.GetWorldToScreen2D(worldPos, cam);
     }
 
@@ -182,74 +179,74 @@ pub const CameraSystem = struct {
     }
 
     pub fn after(self: *Self, _: f32) !void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |_| {
+        if (self.ecs.get(self.camera, r.Camera2D)) |_| {
             r.EndMode2D();
         }
     }
 
     //=== CAM functions ===========================================================================
     pub fn getCam(self: Self) r.Camera2D {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.get(self.camera, r.Camera2D)) |cam| {
             return cam;
         }
         unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCam(self: Self, cam: r.Camera2D) void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |c| {
+        if (self.ecs.getPtr(self.camera, r.Camera2D)) |c| {
             c.* = cam;
         }
     }
 
     pub fn setCamMode(self: Self, mode: r.CameraMode) void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
-            r.SetCameraMode(cam.*, mode);
+        if (self.ecs.get(self.camera, r.Camera2D)) |cam| {
+            r.SetCameraMode(cam, mode);
         }
     }
 
     pub fn getCamOffset(self: Self) r.Vector2 {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.get(self.camera, r.Camera2D)) |cam| {
             return cam.offset;
         }
         unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamOffset(self: Self, offset: r.Vector2) void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.getPtr(self.camera, r.Camera2D)) |cam| {
             cam.offset = offset;
         }
     }
 
     pub fn getCamTarget(self: Self) r.Vector2 {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.get(self.camera, r.Camera2D)) |cam| {
             return cam.target;
         }
         unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamTarget(self: Self, target: r.Vector2) void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.getPtr(self.camera, r.Camera2D)) |cam| {
             cam.target = target;
         }
     }
 
     pub fn getCamZoom(self: Self) f32 {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.get(self.camera, r.Camera2D)) |cam| {
             return cam.zoom;
         }
         unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamZoom(self: Self, zoom: f32) void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.getPtr(self.camera, r.Camera2D)) |cam| {
             cam.zoom = zoom;
         }
     }
 
     pub fn getCamRotation(self: Self) f32 {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.get(self.camera, r.Camera2D)) |cam| {
             return cam.rotation;
         }
         unreachable; //if we have a CameraSystem it should have created a camera intance
     }
     pub fn setCamRotation(self: Self, rotation: f32) void {
-        if (self.ecs.getPtr(r.Camera2D, self.camRef)) |cam| {
+        if (self.ecs.getPtr(self.camera, r.Camera2D)) |cam| {
             cam.rotation = rotation;
         }
     }
@@ -258,53 +255,53 @@ pub const CameraSystem = struct {
 
     pub fn initCameraWASD(self: *Self, wasd: CameraWASD) void {
         log.debug("init camera wasd {?}", .{wasd});
-        if (self.ecs.getOnePtr(self.camera, CameraWASD)) |camWasd| {
+        if (self.ecs.getPtr(self.camera, CameraWASD)) |camWasd| {
             camWasd.* = wasd;
         } else {
-            ignore(self.ecs.add(self.camera, wasd));
+            ignore(self.ecs.put(self.camera, wasd));
         }
     }
 
     pub fn initMouseDrag(self: *Self, drag: CameraMouseDrag) void {
         log.debug("init mouse drag {?}", .{drag});
-        if (self.ecs.getOnePtr(self.camera, CameraMouseDrag)) |camDrag| {
+        if (self.ecs.getPtr(self.camera, CameraMouseDrag)) |camDrag| {
             camDrag.* = drag;
         } else {
-            ignore(self.ecs.add(self.camera, drag));
+            ignore(self.ecs.put(self.camera, drag));
         }
     }
 
     pub fn initMouseZoomScroll(self: *Self, zoomer: CameraScrollZoom) void {
         log.debug("init mouse zoom scroll {?}", .{zoomer});
-        if (self.ecs.getOnePtr(self.camera, CameraScrollZoom)) |camZoom| {
+        if (self.ecs.getPtr(self.camera, CameraScrollZoom)) |camZoom| {
             camZoom.* = zoomer;
         } else {
-            ignore(self.ecs.add(self.camera, zoomer));
+            ignore(self.ecs.put(self.camera, zoomer));
         }
     }
 
     pub fn initTouchZoomAndDrag(self: *Self, zoomDragger: TwoFingerZoomAndDrag) void {
         log.debug("init touch zoom and drag {?}", .{zoomDragger});
-        if (self.ecs.getOnePtr(self.camera, TwoFingerZoomAndDrag)) |camZoomDragger| {
+        if (self.ecs.getPtr(self.camera, TwoFingerZoomAndDrag)) |camZoomDragger| {
             camZoomDragger.* = zoomDragger;
         } else {
-            ignore(self.ecs.add(self.camera, zoomDragger));
+            ignore(self.ecs.put(self.camera, zoomDragger));
         }
     }
 };
 
 pub fn screenToWorld(screenPos: r.Vector2) r.Vector2 {
-    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    const cam = _ecsInstance.?.get(_camera, r.Camera2D);
     if (builtin.mode == .Debug) {
         if (cam == null) {
             @panic("no Camera2D available");
         }
     }
-    return r.GetScreenToWorld2D(screenPos, cam.?.*);
+    return r.GetScreenToWorld2D(screenPos, cam.?);
 }
 
 pub fn worldToScreen(worldPos: r.Vector2) r.Vector2 {
-    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    const cam = _ecsInstance.?.get(_camera, r.Camera2D);
     if (builtin.mode == .Debug) {
         if (cam == null) {
             @panic("no Camera2D available");
@@ -314,7 +311,7 @@ pub fn worldToScreen(worldPos: r.Vector2) r.Vector2 {
 }
 
 pub fn screenLengthToWorld(lenght: f32) f32 {
-    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    const cam = _ecsInstance.?.get(_camera, r.Camera2D);
     if (builtin.mode == .Debug) {
         if (cam == null) {
             @panic("no Camera2D available");
@@ -324,7 +321,7 @@ pub fn screenLengthToWorld(lenght: f32) f32 {
 }
 
 pub fn worldLengthToScreen(lenght: f32) f32 {
-    const cam = _ecsInstance.?.getPtr(r.Camera2D, _camera.?);
+    const cam = _ecsInstance.?.get(_camera, r.Camera2D);
     if (builtin.mode == .Debug) {
         if (cam == null) {
             @panic("no Camera2D available");

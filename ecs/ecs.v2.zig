@@ -6,7 +6,7 @@ const std = @import("std");
 const meta = std.meta;
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
-const EntityID = @import("entity.zig").EntityID;
+pub const EntityID = @import("entity.zig").EntityID;
 const storage = @import("archetype_storage.zig");
 const ArchetypeHash = storage.ArchetypeHash;
 const archetypeHash = storage.archetypeHash;
@@ -60,6 +60,8 @@ pub const ECS = struct {
     }
 
     //=== Entity ==================================================================================
+
+    /// create new entity without any components attached
     pub fn create(this: *@This()) !EntityID {
         const id = this.nextEnitityID;
         const hash = archetypeHash(.{});
@@ -131,9 +133,17 @@ pub const ECS = struct {
     }
 
     pub fn get(this: *@This(), entity: EntityID, comptime TComponent: type) ?TComponent {
+        if (this.getPtr(entity, TComponent)) |ptr| return ptr.*;
+        return null;
+    }
+
+    pub fn getPtr(this: *@This(), entity: EntityID, comptime TComponent: type) ?*TComponent {
         if (this.enitities.get(entity)) |hash| {
-            if (this.archetypes.get(hash) orelse this.addedArchetypes.get(hash)) |archStorage| {
-                return archStorage.get(entity, TComponent) catch |err| {
+            if (this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash)) |archStorage| {
+                return archStorage.getPtr(entity, TComponent) catch |err| {
+                    if (err == error.ComponentNotPartOfArchetype) return null;
+
+                    //otherwise we have a problem
                     std.debug.panic("ECS.get({d}, {s}) -> {?}", .{ entity, @typeName(TComponent), err });
                 };
             } else if (builtin.mode == .Debug) {
