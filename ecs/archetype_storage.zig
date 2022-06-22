@@ -113,7 +113,7 @@ const ArchetypeColumn = struct {
         return list.items[index];
     }
 
-    /// performs a swapRemove on the underlying list
+    /// performs a `swapRemove` on the underlying list
     pub fn remove(this: *@This(), index: usize) void {
         this._remove(this, index);
     }
@@ -192,6 +192,7 @@ pub const ArchetypeStorage = struct {
             typeId(TComponent),
             try ArchetypeColumn.init(this.allocator, TComponent),
         );
+        this.hash = combineArchetypeHash(this.hash, .{TComponent});
     }
 
     pub fn deinit(this: *@This()) void {
@@ -300,7 +301,10 @@ pub const ArchetypeStorage = struct {
 
     /// create a new entry for existing entity and copy all data from previous Storage
     pub fn copyFromOldArchetype(this: *@This(), entity: EntityID, oldStorage: ArchetypeStorage) !usize {
-        if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
+        if (this.removedEntities.contains(entity)) {
+            _ = this.removedEntities.swapRemove(entity);
+        }
+        else if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
 
         const index = this.addedEntityIDs.items.len;
 
@@ -352,6 +356,10 @@ pub const ArchetypeStorage = struct {
 
     /// add a new entity with given components (tuple) to this storage
     pub fn newEntity(this: *@This(), entity: EntityID) !usize {
+        if (this.removedEntities.contains(entity)) {
+            _ = this.removedEntities.swapRemove(entity);
+            return this.entityIndexMap.get(entity).?;
+        }
         if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
 
         const index = this.addedEntityIDs.items.len;
@@ -387,6 +395,7 @@ pub const ArchetypeStorage = struct {
                     for (this.addedData.values()) |*column| {
                         column.remove(i);
                     }
+                    std.debug.assert(this.addedEntityIDs.swapRemove(i) == entity);
                     return;
                 }
             }
@@ -424,7 +433,7 @@ pub const ArchetypeStorage = struct {
         for (this.removedEntities.keys()) |removed| {
             if (this.entityIndexMap.get(removed)) |index| {
                 // remove from entityIDs
-                _ = this.entityIDs.swapRemove(index);
+                std.debug.assert(this.entityIDs.swapRemove(index) == removed);
                 if (this.entityIDs.items.len > 0 and index < this.entityIDs.items.len - 1) {
                     const swappedEntity = this.entityIDs.items[index];
                     try this.entityIndexMap.put(swappedEntity, index);
@@ -435,7 +444,7 @@ pub const ArchetypeStorage = struct {
                     column.remove(index);
                 }
             }
-            _ = this.entityIndexMap.swapRemove(removed);
+            std.debug.assert(this.entityIndexMap.swapRemove(removed));
         }
         this.removedEntities.clearAndFree();
     }
@@ -468,12 +477,14 @@ pub const ArchetypeStorage = struct {
     ///
     /// ```
     pub fn query(this: *@This(), comptime arch: anytype) error{ComponentNotPartOfArchetype}!ArchetypeSlices(arch) {
-        var slices: ArchetypeSlices(arch) = undefined;
-        slices.data.entities = this.entities();
+        if (arch.len > this.data.keys().len) return error.ComponentNotPartOfArchetype;
 
+        var slices: ArchetypeSlices(arch) = undefined;
         inline for (arch) |lT| {
             @field(slices.data, lT[0]) = try this.slice(lT[1]);
         }
+
+        slices.data.entities = this.entities();
         return slices;
     }
 };

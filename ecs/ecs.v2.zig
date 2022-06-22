@@ -25,9 +25,7 @@ pub const ECS = struct {
     archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
     addedArchetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
 
-    pub fn init(
-        allocator: std.mem.Allocator,
-    ) !@This() {
+    pub fn init(allocator: std.mem.Allocator) !@This() {
         var ecs = @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
@@ -103,23 +101,25 @@ pub const ECS = struct {
                         const newHash = combineArchetypeHash(oldHash, @TypeOf(component));
                         //after adding to new archetype, delete from old
                         defer oldStorage.delete(entity) catch unreachable;
-
+                        var newStorage: *ArchetypeStorage = undefined;
                         //storage already exists
-                        if (this.archetypes.getPtr(newHash)) |newStorage| {
+                        if (this.archetypes.getPtr(newHash)) |existingStorage| {
                             // move entity to this storage
-                            _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
+                            // _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
+                            newStorage = existingStorage;
                         }
                         //storage is new, but already created in this frame
                         else if (this.addedArchetypes.getPtr(newHash)) |newlyAddedStorage| {
-                            _ = try newlyAddedStorage.copyFromOldArchetype(entity, oldStorage.*);
+                            // _ = try newlyAddedStorage.copyFromOldArchetype(entity, oldStorage.*);
+                            newStorage = newlyAddedStorage;
                         }
                         //storage for this archetype does not exist yet
                         else {
-                            var newArchetype = try ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component));
-                            _ = try newArchetype.copyFromOldArchetype(entity, oldStorage.*);
-                            try newArchetype.put(entity, component);
-                            try this.addedArchetypes.put(newHash, newArchetype);
+                            try this.addedArchetypes.put(newHash, try ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component)));
+                            newStorage = this.addedArchetypes.getPtr(newHash).?;
                         }
+                        _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
+                        try newStorage.put(entity, component);
                         try this.enitities.put(entity, newHash);
                     },
                     else => return err,
@@ -143,6 +143,13 @@ pub const ECS = struct {
             std.debug.panic("Entity #{d} does not exist", .{entity});
         }
         return null;
+    }
+
+    //=== Query ===================================================================================
+
+    /// query all **synced** archetypes for entities with component types in `arch` tuple
+    pub fn query(this: *@This(), comptime arch: anytype) ArchetypeIterator(arch) {
+        return ArchetypeIterator(arch).init(this.archetypes.values());
     }
 
     //=== Systems =================================================================================
@@ -269,6 +276,59 @@ pub const ECS = struct {
         try self.syncArchetypes();
     }
 };
+
+pub fn ArchetypeIterator(comptime arch: anytype) type {
+    return struct {
+        archetypeIndex: usize,
+        entityIndex: usize = 0,
+        archetypes: []ArchetypeStorage,
+        current: ArchetypeSlices(arch),
+
+        pub fn init(archetypes: []ArchetypeStorage) @This() {
+            var archetypeIndex: usize = 0;
+            var slices: ArchetypeSlices(arch) = undefined;
+            for (archetypes) |*archetype| {
+                slices = archetype.query(arch) catch {
+                    archetypeIndex += 1;
+                    continue;
+                };
+                break;
+            }
+            return @This(){
+                .archetypeIndex = archetypeIndex,
+                .archetypes = archetypes,
+                .current = slices,
+            };
+        }
+
+        pub fn next(this: *@This()) ?ArchetypeEntry(arch) {
+            if (this.archetypeIndex >= this.archetypes.len) return null;
+            if (this.current.get(this.entityIndex)) |nextEntry| {
+                this.entityIndex += 1;
+                return nextEntry;
+            } else {
+                this.archetypeIndex += 1;
+                if (this.archetypeIndex >= this.archetypes.len) return null;
+
+                var slices: ArchetypeSlices(arch) = undefined;
+                for (this.archetypes[this.archetypeIndex..]) |*archetype| {
+                    slices = archetype.query(arch) catch {
+                        this.archetypeIndex += 1;
+                        continue;
+                    };
+                    break;
+                }
+
+                if (this.archetypeIndex >= this.archetypes.len) return null;
+
+                this.current = slices;
+                this.entityIndex = 0;
+
+                return this.next();
+            }
+        }
+    };
+}
 
 pub const System = struct {
     ///pointer to system instance
@@ -398,6 +458,47 @@ test "get component data from entity" {
     // and after sync
     try expectEqual(Position{ .x = 1, .y = 2 }, ecs.get(entity, Position).?);
     try expectEqual(Name{ .name = "foobar" }, ecs.get(entity, Name).?);
+}
+
+test "query" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    const entity1 = try ecs.create();
+    const entity2 = try ecs.create();
+    const entity3 = try ecs.create();
+
+    try ecs.put(entity1, Position{ .x = 1, .y = 2 });
+    try ecs.put(entity1, Name{ .name = "foo" });
+    try ecs.put(entity2, Position{ .x = 2, .y = 3 });
+    try ecs.put(entity3, Name{ .name = "bar" });
+
+    try ecs.syncArchetypes();
+
+    var pnIterator = ecs.query(.{ .{ "pos", Position }, .{ "name", Name } });
+    const pnEntry = pnIterator.next().?;
+    try expectEqual(entity1, pnEntry.entity);
+    try expectEqual(Position{ .x = 1, .y = 2 }, pnEntry.pos.*);
+    try expectEqual(Name{ .name = "foo" }, pnEntry.name.*);
+    try expect(pnIterator.next() == null); // entity1 is the only one with both Position & Name so the iteration ends here
+
+    var pIterator = ecs.query(.{.{ "posi", Position }});
+    var pEntry = pIterator.next().?;
+    try expectEqual(entity2, pEntry.entity);
+    try expectEqual(Position{ .x = 2, .y = 3 }, pEntry.posi.*);
+    pEntry = pIterator.next().?;
+    try expectEqual(entity1, pEntry.entity);
+    try expectEqual(Position{ .x = 1, .y = 2 }, pEntry.posi.*);
+    try expect(pIterator.next() == null); // entity1 & entity2 have Position
+
+    var nIterator = ecs.query(.{.{ "theName", Name }});
+    var nEntry = nIterator.next().?;
+    try expectEqual(entity1, nEntry.entity);
+    try expectEqual(Name{ .name = "foo" }, nEntry.theName.*);
+    nEntry = nIterator.next().?;
+    try expectEqual(entity3, nEntry.entity);
+    try expectEqual(Name{ .name = "bar" }, nEntry.theName.*);
+    try expect(nIterator.next() == null); // entity1 & entity3 have Name
 }
 
 const ExampleSystem = struct {
