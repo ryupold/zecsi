@@ -21,7 +21,8 @@ pub const ECS = struct {
     window: struct { size: struct { x: f32, y: f32 } = .{ .x = 100, .y = 100 } } = .{},
     systems: std.ArrayList(System),
     nextEnitityID: EntityID = 1,
-    enitities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
+    entities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
+    removedEntities: std.AutoArrayHashMap(EntityID, void),
     archetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
     addedArchetypes: std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage),
 
@@ -29,7 +30,8 @@ pub const ECS = struct {
         var ecs = @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
-            .enitities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
+            .entities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
+            .removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator),
             .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
             .addedArchetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
         };
@@ -56,7 +58,8 @@ pub const ECS = struct {
         }
         this.addedArchetypes.deinit();
 
-        this.enitities.deinit();
+        this.entities.deinit();
+        this.removedEntities.deinit();
     }
 
     //=== Entity ==================================================================================
@@ -69,7 +72,7 @@ pub const ECS = struct {
         var voidStorage = this.archetypes.getPtr(hash).?;
         _ = try voidStorage.newEntity(id);
 
-        try this.enitities.put(id, hash);
+        try this.entities.put(id, hash);
 
         this.nextEnitityID += 1;
         return id;
@@ -91,6 +94,17 @@ pub const ECS = struct {
         return entity;
     }
 
+    /// destroy entity (after `syncArchetypes`)
+    pub fn destroy(this: *@This(), entity: EntityID) !void {
+        if (this.entities.get(entity)) |hash| {
+            var anyStorage = this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash);
+            if (anyStorage) |aStorage| {
+                try aStorage.delete(entity);
+            }
+            try this.removedEntities.put(entity, {});
+        }
+    }
+
     /// sync all added and removed data from temp storage to real
     /// this is called usually after each frame (after all before, update, after, ui steps).
     fn syncArchetypes(this: *@This()) !void {
@@ -104,12 +118,17 @@ pub const ECS = struct {
             try this.archetypes.putNoClobber(kv.key_ptr.*, kv.value_ptr.*);
         }
         this.addedArchetypes.clearAndFree();
+
+        for (this.removedEntities.keys()) |removed| {
+            std.debug.assert(this.entities.swapRemove(removed));
+        }
+        this.removedEntities.clearAndFree();
     }
 
     //=== Component ===============================================================================
 
     pub fn put(this: *@This(), entity: EntityID, component: anytype) !void {
-        if (this.enitities.get(entity)) |oldHash| {
+        if (this.entities.get(entity)) |oldHash| {
             var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
             if (previousStorage) |oldStorage| {
                 oldStorage.put(entity, component) catch |err|
@@ -138,7 +157,7 @@ pub const ECS = struct {
                         }
                         _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
                         try newStorage.put(entity, component);
-                        try this.enitities.put(entity, newHash);
+                        try this.entities.put(entity, newHash);
                     },
                     else => return err,
                 };
@@ -154,7 +173,7 @@ pub const ECS = struct {
     }
 
     pub fn getPtr(this: *@This(), entity: EntityID, comptime TComponent: type) ?*TComponent {
-        if (this.enitities.get(entity)) |hash| {
+        if (this.entities.get(entity)) |hash| {
             if (this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash)) |archStorage| {
                 return archStorage.getPtr(entity, TComponent) catch |err| {
                     if (err == error.ComponentNotPartOfArchetype) return null;
@@ -462,8 +481,8 @@ test "syncArchetypes" {
     try expectEqual(archetypeHash(.{Position}), ecs.archetypes.keys()[1]);
     try expectEqual(archetypeHash(.{ Position, Name }), ecs.archetypes.keys()[2]);
 
-    try expectEqual(ecs.enitities.get(entity1).?, archetypeHash(.{ Position, Name }));
-    try expectEqual(ecs.enitities.get(entity2).?, archetypeHash(.{Position}));
+    try expectEqual(ecs.entities.get(entity1).?, archetypeHash(.{ Position, Name }));
+    try expectEqual(ecs.entities.get(entity2).?, archetypeHash(.{Position}));
 }
 
 test "get component data from entity" {

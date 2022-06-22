@@ -1008,15 +1008,15 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
     const ty = @TypeOf(arch);
     const tyInfo = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
-        compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+        compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
     };
 
     inline for (tyInfo.Struct.fields) |field, i| {
         comptime if (!meta.trait.isTuple(field.field_type)) {
-            compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+            compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
         };
         comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {
-            compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
+            compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
         };
     }
 
