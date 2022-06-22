@@ -37,7 +37,7 @@ pub const ECS = struct {
         };
 
         //initialize with void archetype where all new entities will be placed
-        try ecs.archetypes.put(archetypeHash(.{}), try ArchetypeStorage.init(allocator, .{}));
+        try ecs.archetypes.put(archetypeHash(.{}), try ArchetypeStorage.init(allocator));
 
         return ecs;
     }
@@ -66,7 +66,7 @@ pub const ECS = struct {
         const id = this.nextEnitityID;
 
         var voidStorage = this.archetypes.getPtr(archetypeHash(.{})).?;
-        try voidStorage.copy(id, voidStorage.*);
+        _ = try voidStorage.add(id, .{});
 
         this.nextEnitityID += 1;
         return id;

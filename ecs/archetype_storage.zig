@@ -17,18 +17,19 @@ const ArchetypeColumn = struct {
     column: *anyopaque,
     len: usize = 0,
     _append: fn (this: *@This()) std.mem.Allocator.Error!usize,
-    _copyFrom: fn (this: *@This(), from: @This(), fromIndex: usize) std.mem.Allocator.Error!usize,
+    _copyFrom: fn (this: *@This(), from: *@This(), fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize,
     _remove: fn (this: *@This(), index: usize) void,
     _deinit: fn (this: *@This()) void,
 
+    /// create a column for components of type `TComponent`
     pub fn init(allocator: std.mem.Allocator, comptime TComponent: type) !@This() {
-        var list = try allocator.create(std.ArrayList(TComponent));
-        list.* = std.ArrayList(TComponent).init(allocator);
+        var columnPtr = try allocator.create(std.ArrayList(TComponent));
+        columnPtr.* = std.ArrayList(TComponent).init(allocator);
 
         return @This(){
             .typ = typeId(TComponent),
             .allocator = allocator,
-            .column = @ptrCast(*anyopaque, list),
+            .column = @ptrCast(*anyopaque, columnPtr),
             ._append = (struct {
                 fn append(column: *ArchetypeColumn) std.mem.Allocator.Error!usize {
                     var list = column.cast(TComponent) catch unreachable;
@@ -38,9 +39,9 @@ const ArchetypeColumn = struct {
                 }
             }).append,
             ._copyFrom = (struct {
-                fn copyFrom(column: *ArchetypeColumn, from: ArchetypeColumn, fromIndex: usize) (std.mem.Allocator.Error || error.WrongComponentType)!usize {
+                fn copyFrom(column: *ArchetypeColumn, from: *ArchetypeColumn, fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize {
                     var fromList = try from.cast(TComponent);
-                    try column.append(fromList.items[index]);
+                    try column.append(fromList.items[fromIndex]);
                     return column.len - 1;
                 }
             }).copyFrom,
@@ -62,14 +63,17 @@ const ArchetypeColumn = struct {
         };
     }
 
+    /// free the underlying component list
     pub fn deinit(this: *@This()) void {
         this._deinit(this);
     }
 
+    /// add new component to this column
+    /// `@TypeOf(value)` must be same used in `init`
     pub fn append(this: *@This(), value: anytype) !void {
         var list = try this.cast(@TypeOf(value));
         try list.append(value);
-        this.len = list.len;
+        this.len = list.items.len;
     }
 
     /// append one uninitialized entry and return index to it
@@ -77,33 +81,38 @@ const ArchetypeColumn = struct {
         return try this._append(this);
     }
 
+    /// set component data at `index`
     pub fn set(this: *@This(), value: anytype, atIndex: usize) !void {
         var list = try this.cast(@TypeOf(value));
         list.items[atIndex] = value;
     }
 
+    /// get a pointer to component at `index`
     pub fn getPtr(this: *@This(), comptime TComponent: type, index: usize) !*TComponent {
-        var list = try this.cast(@TypeOf(value));
+        var list = try this.cast(TComponent);
         return &list.items[index];
     }
 
+    /// get a copy of component at `index`
     pub fn get(this: *@This(), comptime TComponent: type, index: usize) !TComponent {
-        var list = try this.cast(@TypeOf(value));
+        var list = try this.cast(TComponent);
         return list.items[index];
     }
 
+    /// performs a swapRemove on the underlying list
     pub fn remove(this: *@This(), index: usize) void {
         this._remove(this, index);
     }
 
-    pub fn copyFrom(this: *@This(), from: @This(), fromIndex: usize) !void {
-        try this._copyFrom(this, from, fromIndex);
+    /// append new entry to this column by copying data `from` other column at `fromIndex`
+    pub fn copyFrom(this: *@This(), from: *@This(), fromIndex: usize) !usize {
+        return try this._copyFrom(this, from, fromIndex);
     }
 
-    /// cast column pointer to arraylist pointer of T (if possible)
-    fn cast(this: *@This(), comptime T: type) error.WrongComponentType!*std.ArrayList(T) {
-        if (typeId(T) != this.typ) return error.WrongComponentType;
-        return @ptrCast(*std.ArrayList(T), @alignCast(@alignOf(*std.ArrayList(T)), this.column));
+    /// cast column pointer to arraylist pointer of `TComponent` (if possible)
+    fn cast(this: *@This(), comptime TComponent: type) error{WrongComponentType}!*std.ArrayList(TComponent) {
+        if (typeId(TComponent) != this.typ) return error.WrongComponentType;
+        return @ptrCast(*std.ArrayList(TComponent), @alignCast(@alignOf(*std.ArrayList(TComponent)), this.column));
     }
 };
 
@@ -112,8 +121,8 @@ pub const ArchetypeStorage = struct {
     hash: ArchetypeHash = archetypeHash(.{}),
 
     entityIndexMap: std.AutoArrayHashMap(EntityID, usize),
-    entityIDRow: std.ArrayList(EntityID),
-    addedEntityIDRow: std.ArrayList(EntityID),
+    entityIDs: std.ArrayList(EntityID),
+    addedEntityIDs: std.ArrayList(EntityID),
     removedEntities: std.AutoArrayHashMap(EntityID, void),
 
     data: std.AutoArrayHashMap(ComponentType, ArchetypeColumn),
@@ -149,8 +158,8 @@ pub const ArchetypeStorage = struct {
             .data = data,
             .addedData = addedData,
             .entityIndexMap = std.AutoArrayHashMap(EntityID, usize).init(allocator),
-            .entityIDRow = std.ArrayList(EntityID).init(allocator),
-            .addedEntityIDRow = std.ArrayList(EntityID).init(allocator),
+            .entityIDs = std.ArrayList(EntityID).init(allocator),
+            .addedEntityIDs = std.ArrayList(EntityID).init(allocator),
             .removedEntities = removedEntities,
 
             // ._addEntry = if (arch.len == 0) (struct {
@@ -160,7 +169,7 @@ pub const ArchetypeStorage = struct {
             //         // if it was added in this frame, it is held in the addedData container of previousStorage
             //         const isVolatile = index == null;
             //         if (isVolatile) {
-            //             for (previousStorage.addedEntityIDRow.items) |aE, i| {
+            //             for (previousStorage.addedEntityIDs.items) |aE, i| {
             //                 if (aE == entity) {
             //                     index = i;
             //                     break;
@@ -170,7 +179,7 @@ pub const ArchetypeStorage = struct {
             //         if (index != null) return;
 
             //         // add entity to added list
-            //         try this.addedEntityIDRow.append(entity);
+            //         try this.addedEntityIDs.append(entity);
             //     }
             // }).addToVoid else (struct {
             //     pub fn addEntry(this: *ArchetypeStorage, entity: EntityID, previousStorage: ArchetypeStorage) !void {
@@ -182,7 +191,7 @@ pub const ArchetypeStorage = struct {
             //         // if it was added in this frame, it is held in the addedData container of previousStorage
             //         const isVolatile = index == null;
             //         if (isVolatile) {
-            //             for (previousStorage.addedEntityIDRow.items) |aE, i| {
+            //             for (previousStorage.addedEntityIDs.items) |aE, i| {
             //                 if (aE == entity) {
             //                     index = i;
             //                     break;
@@ -213,7 +222,7 @@ pub const ArchetypeStorage = struct {
             //             }
             //         }
             //         // add entity to added list
-            //         try this.addedEntityIDRow.append(entity);
+            //         try this.addedEntityIDs.append(entity);
             //     }
             // }).addEntry,
             // ._removeEntry = (struct {
@@ -224,7 +233,7 @@ pub const ArchetypeStorage = struct {
 
             //         // is entity in temp storage?
             //         if (index == null) {
-            //             for (this.addedEntityIDRow.items) |aE, i| {
+            //             for (this.addedEntityIDs.items) |aE, i| {
             //                 if (aE == entity) {
             //                     index = i;
             //                     break;
@@ -241,7 +250,7 @@ pub const ArchetypeStorage = struct {
             //                 var list = castColumn(T, listPtr);
             //                 _ = list.swapRemove(index.?);
             //             }
-            //             _ = this.addedEntityIDRow.swapRemove(index.?);
+            //             _ = this.addedEntityIDs.swapRemove(index.?);
             //         } else {
             //             //otherwise add to removed list
             //             try this.removedEntities.put(entity, {});
@@ -261,12 +270,12 @@ pub const ArchetypeStorage = struct {
             //             try list.appendSlice(addedList.items);
             //             addedList.clearAndFree();
             //         }
-            //         for (this.addedEntityIDRow.items) |aE| {
-            //             const index = this.entityIDRow.items.len;
-            //             try this.entityIDRow.append(aE);
+            //         for (this.addedEntityIDs.items) |aE| {
+            //             const index = this.entityIDs.items.len;
+            //             try this.entityIDs.append(aE);
             //             try this.entityIndexMap.put(aE, index);
             //         }
-            //         this.addedEntityIDRow.clearAndFree();
+            //         this.addedEntityIDs.clearAndFree();
 
             //         //remove
             //         for (this.removedEntities.keys()) |removed| {
@@ -277,9 +286,9 @@ pub const ArchetypeStorage = struct {
 
             //                     _ = list.swapRemove(index);
             //                 }
-            //                 _ = this.entityIDRow.swapRemove(index);
-            //                 if (this.entityIDRow.items.len > 0 and index < this.entityIDRow.items.len - 1) {
-            //                     const swappedEntity = this.entityIDRow.items[index];
+            //                 _ = this.entityIDs.swapRemove(index);
+            //                 if (this.entityIDs.items.len > 0 and index < this.entityIDs.items.len - 1) {
+            //                     const swappedEntity = this.entityIDs.items[index];
             //                     try this.entityIndexMap.put(swappedEntity, index);
             //                 }
             //             }
@@ -309,10 +318,16 @@ pub const ArchetypeStorage = struct {
     /// add a column to a newly created ArchetypeStorage
     pub fn addColumn(this: *@This(), comptime TComponent: type) error{ OutOfMemory, AlreadyContainsComponentType, StorageAlreadyContainsData }!void {
         if (this.has(TComponent)) return error.AlreadyContainsComponentType;
-        if (this.entityIDRow.items.len > 0 or this.addedEntityIDRow.items.len > 0) return error.StorageAlreadyContainsData;
+        if (this.entityIDs.items.len > 0 or this.addedEntityIDs.items.len > 0) return error.StorageAlreadyContainsData;
 
-        var column = try ArchetypeColumn.init(this.allocator, TComponent);
-        try this.data.put(typeID(TComponent), column);
+        try this.data.put(
+            typeId(TComponent),
+            try ArchetypeColumn.init(this.allocator, TComponent),
+        );
+        try this.addedData.put(
+            typeId(TComponent),
+            try ArchetypeColumn.init(this.allocator, TComponent),
+        );
     }
 
     pub fn deinit(this: *@This()) void {
@@ -326,10 +341,10 @@ pub const ArchetypeStorage = struct {
         }
 
         this.entityIndexMap.deinit();
-        this.entityIDRow.deinit();
+        this.entityIDs.deinit();
         this.data.deinit();
         this.addedData.deinit();
-        this.addedEntityIDRow.deinit();
+        this.addedEntityIDs.deinit();
         this.removedEntities.deinit();
     }
 
@@ -342,7 +357,7 @@ pub const ArchetypeStorage = struct {
     /// ```
     /// const e: EntityID = 312; //assuming this entity exists in this ArchetypeStorage
     /// const p = Position{.x = 5, .y=0.7};
-    /// try put(e, .{p});
+    /// try put(e, p);
     /// ```
     pub fn put(this: *@This(), entity: EntityID, componentData: anytype) !void {
         const T = @TypeOf(componentData);
@@ -357,10 +372,10 @@ pub const ArchetypeStorage = struct {
         }
         // entity is newly added to this storage
         else {
-            for (this.addedEntityIDRow.items) |aE, index| {
+            for (this.addedEntityIDs.items) |aE, index| {
                 if (aE == entity) {
                     if (this.addedData.getPtr(typeId(T))) |addedColumn| {
-                        addedColumn.set(componentData, index);
+                        try addedColumn.set(componentData, index);
                         return;
                     } else {
                         return error.ComponentNotPartOfArchetype;
@@ -374,20 +389,20 @@ pub const ArchetypeStorage = struct {
 
     /// return all entities `sync`ed with this archetype
     pub fn entities(this: @This()) []EntityID {
-        return this.entityIDRow.items;
+        return this.entityIDs.items;
     }
 
     /// get reference to component data
     /// can become invalid after `sync`
-    pub fn getPtr(this: @This(), entity: EntityID, comptime T: type) error{ ComponentNotPartOfArchetype, EntityNotFound }!*T {
+    pub fn getPtr(this: @This(), entity: EntityID, comptime T: type) !*T {
         if (this.data.getPtr(typeId(T))) |columnPtr| {
             // entity is already synced
             if (this.entityIndexMap.get(entity)) |index| {
-                return columnPtr.getPtr(T, index);
+                return try columnPtr.getPtr(T, index);
             }
             // entity is newly added to this storage
             else {
-                for (this.addedEntityIDRow.items) |aE, index| {
+                for (this.addedEntityIDs.items) |aE, index| {
                     if (aE == entity) {
                         var addedColumnPtr = this.addedData.getPtr(typeId(T)).?;
                         return addedColumnPtr.getPtr(T, index);
@@ -401,7 +416,7 @@ pub const ArchetypeStorage = struct {
     }
 
     /// get component data
-    pub fn get(this: @This(), entity: EntityID, comptime T: type) error{ ComponentNotPartOfArchetype, EntityNotFound }!T {
+    pub fn get(this: @This(), entity: EntityID, comptime T: type) !T {
         const ref = try this.getPtr(entity, T);
         return ref.*;
     }
@@ -419,34 +434,151 @@ pub const ArchetypeStorage = struct {
     /// return direct data access to the `TComponent` column
     /// this is a guaranteed valid reference until the next call to `sync`
     pub fn slice(this: *@This(), comptime TComponent: type) error{ComponentNotPartOfArchetype}![]TComponent {
-        if (this.data.get(typeId(TComponent))) |columnPtr| {
+        if (this.data.getPtr(typeId(TComponent))) |columnPtr| {
             var column = columnPtr.cast(TComponent) catch unreachable;
             return column.items;
         }
         return error.ComponentNotPartOfArchetype;
     }
 
-    /// copy entity to this ArchetypeStorage with data of previous storage
-    /// this won't make the entity (data) available directly but a call to `sync` is necessary to
-    /// make the change permanent. This happens usually at the end of the frame (after all before, update, after, ui steps).
-    /// this is a readonly operation on the previous ArchetypeStorage, it will keep its values.
-    /// call `delete` on the previous storage afterwards
-    pub fn copy(this: *@This(), entity: EntityID, fromStorage: ArchetypeStorage) !void {
-        // _ = try this._addEntry(this, entity, fromStorage);
-        //TODO ...
+    /// create a new entry for existing entity and copy all data from previous Storage
+    fn copyFromOldArchetype(this: *@This(), entity: EntityID, oldStorage: ArchetypeStorage) !usize {
+        if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
+
+        const index = this.addedEntityIDs.items.len;
+
+        var data: std.AutoArrayHashMap(ComponentType, ArchetypeColumn) = undefined;
+        var oldIndex: usize = getIndex: {
+            if (oldStorage.entityIndexMap.get(entity)) |i| {
+                data = oldStorage.data;
+                break :getIndex i;
+            } else {
+                for (oldStorage.addedEntityIDs.items) |e, i| {
+                    if (e == entity) {
+                        data = oldStorage.addedData;
+                        break :getIndex i;
+                    }
+                }
+                return error.EntityNotFound;
+            }
+        };
+
+        try this.addedEntityIDs.append(entity);
+
+        errdefer {
+            var it = data.iterator();
+            while (it.next()) |kv| {
+                // append all components that this archetype supports
+                if (this.addedData.getPtr(kv.key_ptr.*)) |addedColumn| {
+                    if (addedColumn.len > index) {
+                        addedColumn.remove(index);
+                    }
+                }
+            }
+            _ = this.addedEntityIDs.swapRemove(index);
+        }
+
+        var addedDataIterator = this.addedData.iterator();
+        while (addedDataIterator.next()) |kv| {
+            // old storage has this component type, then copy data
+            if (data.getPtr(kv.key_ptr.*)) |oldColumn| {
+                _ = try kv.value_ptr.copyFrom(oldColumn, oldIndex);
+            }
+            // old storage is missing this component type so just add a new entry (undefined)
+            else {
+                _ = try kv.value_ptr.addOne();
+            }
+        }
+
+        return index;
+    }
+
+    /// add a new entity with given components (tuple) to this storage
+    fn newEntity(this: *@This(), entity: EntityID) !usize {
+        if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
+
+        const index = this.addedEntityIDs.items.len;
+        try this.addedEntityIDs.append(entity);
+        errdefer {
+            for (this.addedData.values()) |*column| {
+                if (column.len > index) {
+                    column.remove(index);
+                }
+            }
+            _ = this.addedEntityIDs.swapRemove(index);
+        }
+
+        for (this.addedData.values()) |*column| {
+            const newIndexInAddedData = try column.addOne();
+            std.debug.assert(newIndexInAddedData == index);
+        }
+
+        return index;
     }
 
     /// mark an entity as deleted in this storage.
     /// this will take effect after a call to `sync`
     pub fn delete(this: *@This(), entity: EntityID) !void {
-        try this._removeEntry(this, entity);
+        // is already synced
+        if (this.entityIndexMap.contains(entity)) {
+            try this.removedEntities.put(entity, {});
+        }
+        // otherwise it should be in addedEntityIDs
+        else {
+            for (this.addedEntityIDs.items) |e, i| {
+                if (e == entity) {
+                    for (this.addedData.values()) |*column| {
+                        column.remove(i);
+                    }
+                    return;
+                }
+            }
+            return error.EntityNotFound;
+        }
     }
 
     /// sync all added and removed data from temp storage to real
     /// this is called usually after each frame (after all before, update, after, ui steps).
-    /// after this operation `addedData`, `addedEntityIDRow` and `removedEntities` will be empty
+    /// after this operation `addedData`, `addedEntityIDs` and `removedEntities` will be empty
     pub fn sync(this: *@This()) !void {
-        try this._sync(this);
+        //=== add ====
+        // transfer entity IDs
+        for (this.addedEntityIDs.items) |aE| {
+            const index = this.entityIDs.items.len;
+            try this.entityIDs.append(aE);
+            try this.entityIndexMap.put(aE, index);
+        }
+        this.addedEntityIDs.clearAndFree();
+
+        // transfer component data
+        var it = this.addedData.iterator();
+        while (it.next()) |kv| {
+            var column = this.data.getPtr(kv.key_ptr.*).?;
+            var i: usize = 0;
+            while (i < kv.value_ptr.len) : (i += 1) {
+                _ = try column.copyFrom(kv.value_ptr, i);
+            }
+        }
+        this.addedData.clearAndFree();
+
+        //=== remove ====
+        for (this.removedEntities.keys()) |removed| {
+            if (this.entityIndexMap.get(removed)) |index| {
+                // remove from entityIDs
+                _ = this.entityIDs.swapRemove(index);
+                if (this.entityIDs.items.len > 0 and index < this.entityIDs.items.len - 1) {
+                    const swappedEntity = this.entityIDs.items[index];
+                    try this.entityIndexMap.put(swappedEntity, index);
+                }
+
+                // remove component data
+                for (this.data.values()) |*column| {
+                    column.remove(index);
+                }
+            }
+            _ = this.entityIndexMap.swapRemove(removed);
+        }
+        this.removedEntities.clearAndFree();
     }
 
     /// get number of `sync`ed entities in this storage
@@ -488,13 +620,16 @@ pub const ArchetypeStorage = struct {
 };
 
 test "ArchetypeStorage init" {
-    var sut = try ArchetypeStorage.init(t.allocator, .{ Position, Name }); //void archetype
+    var sut = try ArchetypeStorage.init(t.allocator); //void archetype
     defer sut.deinit();
+
+    try sut.addColumn(Position);
+    try sut.addColumn(Name);
 
     try t.expectEqual(@as(usize, 2), sut.data.keys().len);
     try t.expectEqual(@as(usize, 2), sut.addedData.keys().len);
     try t.expectEqual(@as(usize, 0), sut.removedEntities.count());
-    try t.expectEqual(@as(usize, 0), sut.entityIDRow.items.len);
+    try t.expectEqual(@as(usize, 0), sut.entityIDs.items.len);
     try t.expectEqual(@as(usize, 0), sut.entityIndexMap.count());
 }
 
@@ -524,72 +659,80 @@ test "ArchetypeStorage extend" {
 }
 
 test "ArchetypeStorage add to {}" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{}); //void archetype
+    var voidArch = try ArchetypeStorage.init(t.allocator); //void archetype
     defer voidArch.deinit();
 
     const entity1: EntityID = 1;
     const entity2: EntityID = 2;
 
     // initially every entity is added to the void storage
-    try voidArch.copy(entity1, voidArch);
-    try voidArch.copy(entity2, voidArch);
-    try expectEqual(entity1, voidArch.addedEntityIDRow.items[0]);
-    try expectEqual(entity2, voidArch.addedEntityIDRow.items[1]);
+    _ = try voidArch.newEntity(entity1);
+    _ = try voidArch.newEntity(entity2);
+    try expectEqual(entity1, voidArch.addedEntityIDs.items[0]);
+    try expectEqual(entity2, voidArch.addedEntityIDs.items[1]);
     try expectEqual(@as(usize, 0), voidArch.entityIndexMap.count());
 
     // sync everything from addedData to data
     try voidArch.sync();
 
-    try expectEqual(@as(usize, 0), voidArch.addedEntityIDRow.items.len);
-    try expectEqual(entity1, voidArch.entityIDRow.items[0]);
-    try expectEqual(entity2, voidArch.entityIDRow.items[1]);
+    try expectEqual(@as(usize, 0), voidArch.addedEntityIDs.items.len);
+    try expectEqual(entity1, voidArch.entityIDs.items[0]);
+    try expectEqual(entity2, voidArch.entityIDs.items[1]);
     try expectEqual(@as(usize, 2), voidArch.entityIndexMap.count());
     try expectEqual(@as(usize, 0), voidArch.entityIndexMap.get(entity1).?);
     try expectEqual(@as(usize, 1), voidArch.entityIndexMap.get(entity2).?);
 }
 
 test "ArchetypeStorage move from {Position} to {} and set data" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{}); //void archetype
-    var positionArch = try ArchetypeStorage.init(t.allocator, .{Position}); //position archetype
+    var voidArch = try ArchetypeStorage.init(t.allocator); //void archetype
     defer voidArch.deinit();
+    var positionArch = try ArchetypeStorage.init(t.allocator); //position archetype
     defer positionArch.deinit();
+    try positionArch.addColumn(Position);
 
     const entity1: EntityID = 1;
     const entity2: EntityID = 2;
 
     // initially every entity is added to the void storage
-    try voidArch.copy(entity1, voidArch);
+    _ = try voidArch.newEntity(entity1);
 
     // sync steps puts moves components from `addedData` to `data`
     try voidArch.sync();
 
     // it should also work without a call to sync
     // then the components in `addedData` are used
-    try voidArch.copy(entity2, voidArch);
+    _ = try voidArch.newEntity(entity2);
+    try expectEqual(entity2, voidArch.addedEntityIDs.items[0]);
 
-    try positionArch.copy(entity1, voidArch);
-    try positionArch.copy(entity2, voidArch);
-    try expectEqual(entity1, positionArch.addedEntityIDRow.items[0]);
-    try expectEqual(entity2, positionArch.addedEntityIDRow.items[1]);
+    _ = try positionArch.copyFromOldArchetype(entity1, voidArch);
+    _ = try positionArch.copyFromOldArchetype(entity2, voidArch);
+    try expectEqual(entity1, positionArch.addedEntityIDs.items[0]);
+    try expectEqual(entity2, positionArch.addedEntityIDs.items[1]);
 
+    try expectEqual(positionArch.addedEntityIDs.items.len, positionArch.addedData.values()[0].len);
     try positionArch.sync();
+    try expectEqual(positionArch.entityIndexMap.count(), positionArch.data.values()[0].len);
 
     // sync everything from addedData to data
-    try expectEqual(@as(usize, 0), positionArch.addedEntityIDRow.items.len);
-    try expectEqual(entity1, positionArch.entityIDRow.items[0]);
-    try expectEqual(entity2, positionArch.entityIDRow.items[1]);
+    try expectEqual(@as(usize, 0), positionArch.addedEntityIDs.items.len);
+    try expectEqual(entity1, positionArch.entityIDs.items[0]);
+    try expectEqual(entity2, positionArch.entityIDs.items[1]);
 
     const p = Position{ .x = 73, .y = 123 };
     try positionArch.put(entity1, p);
+    try positionArch.put(entity2, p);
     const slice = try positionArch.slice(Position);
     try expectEqual(p, slice[0]);
+    try expectEqual(p, slice[1]);
 }
 
 test "ArchetypeStorage has" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{});
+    var voidArch = try ArchetypeStorage.init(t.allocator);
     defer voidArch.deinit();
-    var positionNameArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name });
+    var positionNameArch = try ArchetypeStorage.init(t.allocator);
     defer positionNameArch.deinit();
+    try positionNameArch.addColumn(Position);
+    try positionNameArch.addColumn(Name);
 
     try expect(voidArch.has(Position) == false);
     try expect(voidArch.has(Name) == false);
@@ -600,16 +743,18 @@ test "ArchetypeStorage has" {
 }
 
 test "ArchetypeStorage put, get, getPtr, slice" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{});
+    var voidArch = try ArchetypeStorage.init(t.allocator);
     defer voidArch.deinit();
-    var positionNameArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name });
+    var positionNameArch = try ArchetypeStorage.init(t.allocator);
     defer positionNameArch.deinit();
+    try positionNameArch.addColumn(Position);
+    try positionNameArch.addColumn(Name);
 
     const entity1: EntityID = 1;
-    try voidArch.copy(entity1, voidArch);
+    _ = try voidArch.newEntity(entity1);
     try voidArch.sync();
 
-    try positionNameArch.copy(entity1, voidArch);
+    _ = try positionNameArch.copyFromOldArchetype(entity1, voidArch);
 
     //put
     const p = Position{ .x = 123, .y = 567 };
@@ -639,19 +784,24 @@ test "ArchetypeStorage put, get, getPtr, slice" {
 }
 
 test "ArchetypeStorage move data from lower to higher and from higher to lower" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{});
+    var voidArch = try ArchetypeStorage.init(t.allocator);
     defer voidArch.deinit();
-    var positionNameArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name });
+    var positionNameArch = try ArchetypeStorage.init(t.allocator);
     defer positionNameArch.deinit();
-    var positionNameTargetArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name, Target });
+    try positionNameArch.addColumn(Position);
+    try positionNameArch.addColumn(Name);
+    var positionNameTargetArch = try ArchetypeStorage.init(t.allocator);
     defer positionNameTargetArch.deinit();
+    try positionNameTargetArch.addColumn(Position);
+    try positionNameTargetArch.addColumn(Name);
+    try positionNameTargetArch.addColumn(Target);
 
     const entity1: EntityID = 1;
-    try voidArch.copy(entity1, voidArch);
+    _ = try voidArch.newEntity(entity1);
     try voidArch.sync();
 
     // move to {Position,Name,Target} archetype
-    try positionNameTargetArch.copy(entity1, voidArch);
+    _ = try positionNameTargetArch.copyFromOldArchetype(entity1, voidArch);
     try positionNameTargetArch.sync();
 
     //put
@@ -667,7 +817,7 @@ test "ArchetypeStorage move data from lower to higher and from higher to lower" 
     try expectEqual(target, try positionNameTargetArch.get(entity1, Target));
 
     // move to {Position,Name} archetype
-    try positionNameArch.copy(entity1, positionNameTargetArch);
+    _ = try positionNameArch.copyFromOldArchetype(entity1, positionNameTargetArch);
     try positionNameArch.sync();
 
     try expectEqual(p, try positionNameArch.get(entity1, Position));
@@ -676,22 +826,27 @@ test "ArchetypeStorage move data from lower to higher and from higher to lower" 
 }
 
 test "ArchetypeStorage count, delete and hasEntity" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{});
+    var voidArch = try ArchetypeStorage.init(t.allocator);
     defer voidArch.deinit();
-    var positionNameArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name });
+    var positionNameArch = try ArchetypeStorage.init(t.allocator);
     defer positionNameArch.deinit();
-    var positionNameTargetArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name, Target });
+    try positionNameArch.addColumn(Position);
+    try positionNameArch.addColumn(Name);
+    var positionNameTargetArch = try ArchetypeStorage.init(t.allocator);
     defer positionNameTargetArch.deinit();
+    try positionNameTargetArch.addColumn(Position);
+    try positionNameTargetArch.addColumn(Name);
+    try positionNameTargetArch.addColumn(Target);
 
     const entity1: EntityID = 1;
     try expectEqual(@as(usize, 0), voidArch.count());
-    try voidArch.copy(entity1, voidArch);
+    _ = try voidArch.newEntity(entity1);
     try expectEqual(@as(usize, 0), voidArch.count());
     try voidArch.sync();
     try expectEqual(@as(usize, 1), voidArch.count());
 
     // move to {Position,Name,Target} archetype
-    try positionNameTargetArch.copy(entity1, voidArch);
+    _ = try positionNameTargetArch.copyFromOldArchetype(entity1, voidArch);
     try expect(positionNameTargetArch.hasEntity(entity1) == false);
     try positionNameTargetArch.sync();
     try expect(positionNameTargetArch.hasEntity(entity1)); //only available after sync
@@ -704,21 +859,24 @@ test "ArchetypeStorage count, delete and hasEntity" {
 }
 
 test "ArchetypeStorage query (ArchetypeSlices)" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{});
+    var voidArch = try ArchetypeStorage.init(t.allocator);
     defer voidArch.deinit();
-    var testArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name, Target });
+    var testArch = try ArchetypeStorage.init(t.allocator);
     defer testArch.deinit();
+    try testArch.addColumn(Position);
+    try testArch.addColumn(Name);
+    try testArch.addColumn(Target);
 
     // add 4 entities
     const entities = [_]EntityID{ 1, 2, 3, 4 };
     for (entities) |entity| {
-        try voidArch.copy(entity, voidArch);
+        _ = try voidArch.newEntity(entity);
     }
     try voidArch.sync();
 
     // move to {Position,Name,Target} archetype
     for (voidArch.entities()) |entity, i| {
-        try testArch.copy(entity, voidArch);
+        _ = try testArch.copyFromOldArchetype(entity, voidArch);
 
         //put data (works before and after sync)
         const p = Position{ .x = @intToFloat(f32, i), .y = @intToFloat(f32, i) * 2 };
@@ -758,21 +916,24 @@ test "ArchetypeStorage query (ArchetypeSlices)" {
 }
 
 test "ArchetypeStorage query (ArchetypeEntry)" {
-    var voidArch = try ArchetypeStorage.init(t.allocator, .{});
+    var voidArch = try ArchetypeStorage.init(t.allocator);
     defer voidArch.deinit();
-    var testArch = try ArchetypeStorage.init(t.allocator, .{ Position, Name, Target });
+    var testArch = try ArchetypeStorage.init(t.allocator);
     defer testArch.deinit();
+    try testArch.addColumn(Position);
+    try testArch.addColumn(Name);
+    try testArch.addColumn(Target);
 
     // add 4 entities
     const entities = [_]EntityID{ 1, 2, 3, 4 };
     for (entities) |entity| {
-        try voidArch.copy(entity, voidArch);
+        _ = try voidArch.newEntity(entity);
     }
     try voidArch.sync();
 
     // move to {Position,Name,Target} archetype
     for (voidArch.entities()) |entity, i| {
-        try testArch.copy(entity, voidArch);
+        _ = try testArch.copyFromOldArchetype(entity, voidArch);
 
         //put data (works before and after sync)
         const p = Position{ .x = @intToFloat(f32, i), .y = @intToFloat(f32, i) * 2 };
@@ -814,15 +975,18 @@ test "ArchetypeStorage query (ArchetypeEntry)" {
 /// get usize id for a given type (magic)
 /// typeId implementation by Felix "xq" Queißner
 /// from: https://zig.news/xq/cool-zig-patterns-type-identifier-3mfd
-pub fn typeId(comptime T: type) ComponentType {
-    _ = T;
+pub fn typeId(component: anytype) ComponentType {
+    if (@TypeOf(component) != type) return typeId(@TypeOf(component));
+    _ = component;
     const H = struct {
         var byte: u8 = 0;
     };
     return @ptrToInt(&H.byte);
 }
 
-pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
+pub fn archetypeHash(arch: anytype) ArchetypeHash {
+    if (@TypeOf(arch) == type) return archetypeHash(.{arch});
+
     const ty = @TypeOf(arch);
     const tyInfo = @typeInfo(ty);
     comptime if (!meta.trait.isTuple(ty)) {
@@ -848,7 +1012,8 @@ pub fn archetypeHash(comptime arch: anytype) ArchetypeHash {
     return hash;
 }
 
-pub fn combineArchetypeHash(hash: ArchetypeHash, comptime arch: anytype) ArchetypeHash {
+pub fn combineArchetypeHash(hash: ArchetypeHash, arch: anytype) ArchetypeHash {
+    if (@TypeOf(arch) == type) return combineArchetypeHash(hash, .{arch});
     if (arch.len == 0) return hash;
 
     var newHash: ArchetypeHash = hash;
