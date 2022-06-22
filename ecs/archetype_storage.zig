@@ -20,6 +20,7 @@ const ArchetypeColumn = struct {
     _copyFrom: fn (this: *@This(), from: *@This(), fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize,
     _remove: fn (this: *@This(), index: usize) void,
     _clear: fn (this: *@This()) void,
+    _addToOtherStorage: fn (storage: *ArchetypeStorage) anyerror!void,
     _deinit: fn (this: *@This()) void,
 
     /// create a column for components of type `TComponent`
@@ -60,6 +61,11 @@ const ArchetypeColumn = struct {
                     column.len = 0;
                 }
             }).clear,
+            ._addToOtherStorage = (struct {
+                fn addToOtherStorage(storage: *ArchetypeStorage) !void {
+                    try storage.addColumn(TComponent);
+                }
+            }).addToOtherStorage,
             ._deinit = (struct {
                 fn deinit(column: *ArchetypeColumn) void {
                     var list = column.cast(TComponent) catch unreachable;
@@ -127,6 +133,11 @@ const ArchetypeColumn = struct {
         if (typeId(TComponent) != this.typ) return error.WrongComponentType;
         return @ptrCast(*std.ArrayList(TComponent), @alignCast(@alignOf(*std.ArrayList(TComponent)), this.column));
     }
+
+    /// create a empty column with same type information
+    fn addToOtherStorage(this: @This(), storage: *ArchetypeStorage) !void {
+        return try this._addToOtherStorage(storage);
+    }
 };
 
 pub const ArchetypeStorage = struct {
@@ -141,9 +152,8 @@ pub const ArchetypeStorage = struct {
     data: std.AutoArrayHashMap(ComponentType, ArchetypeColumn),
     addedData: std.AutoArrayHashMap(ComponentType, ArchetypeColumn),
 
-    pub fn init(
-        allocator: std.mem.Allocator,
-    ) !@This() {
+    /// create a new storage without any columns
+    pub fn init(allocator: std.mem.Allocator) !@This() {
         var data = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
         var addedData = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
         var removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator);
@@ -157,6 +167,16 @@ pub const ArchetypeStorage = struct {
             .addedEntityIDs = std.ArrayList(EntityID).init(allocator),
             .removedEntities = removedEntities,
         };
+    }
+
+    /// create a new storage based on `subset`s template and `addColumn(AdditionalComponentType)`
+    pub fn initExtension(allocator: std.mem.Allocator, subset: @This(), comptime AdditionalComponentType: type) !@This() {
+        var extension = try init(allocator);
+        for (subset.data.values()) |column| {
+            try column.addToOtherStorage(&extension);
+        }
+        try extension.addColumn(AdditionalComponentType);
+        return extension;
     }
 
     /// add a column to a newly created ArchetypeStorage
@@ -259,12 +279,12 @@ pub const ArchetypeStorage = struct {
     }
 
     /// true if `this` archetype has `T` components
-    pub fn has(this: *@This(), comptime T: type) bool {
+    pub fn has(this: @This(), comptime T: type) bool {
         return this.data.contains(typeId(T));
     }
 
     /// true if `this` archetype contains `entity` (must be synced)
-    pub fn hasEntity(this: *@This(), entity: EntityID) bool {
+    pub fn hasEntity(this: @This(), entity: EntityID) bool {
         return this.entityIndexMap.contains(entity);
     }
 
@@ -396,7 +416,7 @@ pub const ArchetypeStorage = struct {
                 _ = try column.copyFrom(kv.value_ptr, i);
             }
         }
-        for(this.addedData.values()) |*column| {
+        for (this.addedData.values()) |*column| {
             column.clear();
         }
 

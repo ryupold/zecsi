@@ -53,8 +53,8 @@ pub const ECS = struct {
         }
         this.archetypes.deinit();
 
-        for (this.addedArchetypes.values()) |*archetypeStorage| {
-            archetypeStorage.deinit();
+        for (this.addedArchetypes.values()) |*addedArchetypeStorage| {
+            addedArchetypeStorage.deinit();
         }
         this.addedArchetypes.deinit();
 
@@ -64,9 +64,12 @@ pub const ECS = struct {
     //=== Entity ==================================================================================
     pub fn create(this: *@This()) !EntityID {
         const id = this.nextEnitityID;
+        const hash = archetypeHash(.{});
 
-        var voidStorage = this.archetypes.getPtr(archetypeHash(.{})).?;
+        var voidStorage = this.archetypes.getPtr(hash).?;
         _ = try voidStorage.newEntity(id);
+
+        try this.enitities.put(id, hash);
 
         this.nextEnitityID += 1;
         return id;
@@ -84,31 +87,34 @@ pub const ECS = struct {
 
     pub fn put(this: *@This(), entity: EntityID, component: anytype) !void {
         if (this.enitities.get(entity)) |oldHash| {
-            if (this.archetypes.getPtr(oldHash)) |oldStorage| {
+            var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
+            if (previousStorage) |oldStorage| {
                 oldStorage.put(entity, component) catch |err|
                     switch (err) {
                     // entity did not have this component before
                     error.ComponentNotPartOfArchetype => {
                         const newHash = combineArchetypeHash(oldStorage.hash, .{@TypeOf(component)});
+                        //after adding to new archetype, delete from old
+                        defer oldStorage.delete(entity) catch unreachable;
 
                         //storage already exists
                         if (this.archetypes.getPtr(newHash)) |newStorage| {
                             // move entity to this storage
-                            try newStorage.copy(entity, oldStorage.*);
-                            try oldStorage.delete(entity);
+                            _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
                         }
                         //storage is new, but already created in this frame
-                        else if (this.addedArchetypes.getPtr(newHash)) |newStorage| {
-                            try newStorage.copy(entity, oldStorage.*);
-                            try oldStorage.delete(entity);
+                        else if (this.addedArchetypes.getPtr(newHash)) |newlyAddedStorage| {
+                            _ = try newlyAddedStorage.copyFromOldArchetype(entity, oldStorage.*);
                         }
                         //storage for this archetype does not exist yet
                         else {
-                            //TODO: implement way to extend an archetype storage by one new type
-                            try this.addedArchetypes.put(newHash, ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component)));
+                            var newArchetype = try ArchetypeStorage.initExtension(this.allocator, oldStorage.*, @TypeOf(component));
+                            _ = try newArchetype.copyFromOldArchetype(entity, oldStorage.*);
+                            try this.addedArchetypes.put(newHash, newArchetype);
+                            try this.enitities.put(entity, newHash);
                         }
                     },
-                    error.EntityNotFound => error.EntityNotFound,
+                    else => return err,
                 };
             }
         } else {
@@ -302,10 +308,26 @@ test "create entity" {
     try expectEqual(@as(EntityID, 1), entity1);
     try expectEqual(@as(EntityID, 2), entity2);
 
-    try ecs.update(0.1); // causes sync of archetype storages
+    try ecs.update(0); // causes sync of archetype storages
 
-    try expectEqual(@as(EntityID, 1), ecs.archetypes.values()[0].entities()[0]);
-    try expectEqual(@as(EntityID, 2), ecs.archetypes.values()[0].entities()[1]);
+    const voidArch = ecs.archetypes.get(archetypeHash(.{})).?;
+
+    try expect(voidArch.hasEntity(entity1));
+    try expect(voidArch.hasEntity(entity2));
+}
+
+test "put new component type, not previously present in the entities' storage" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    const entity = try ecs.create();
+
+    try ecs.put(entity, Position{ .x = 1, .y = 2 });
+    // there should be an additional archetype in addedArchetypes
+    try expectEqual(@as(usize, 1), ecs.addedArchetypes.count());
+
+    try ecs.put(entity, Name{ .name = "foobar" });
+    try expectEqual(@as(usize, 2), ecs.addedArchetypes.count());
 }
 
 test "create add component (put new component type, not previously present in the entities' storage)" {
