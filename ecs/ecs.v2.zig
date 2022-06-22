@@ -75,6 +75,22 @@ pub const ECS = struct {
         return id;
     }
 
+    /// create new entity and assign `components` to it
+    /// NOTE: sometimes you will get error: `compiler bug: generating const value for struct field '###'`. Hopefully the Zig compiler will be able to handle that soon
+    /// **FIXME: don't use this function until the Zig compiler is fixed**
+    pub fn createWith(this: *@This(), components: anytype) !EntityID {
+        comptime if (!std.meta.trait.isTuple(@TypeOf(components))) compError("components must be a tuple with value types but was {?}", .{components});
+
+        const info = @typeInfo(@TypeOf(components));
+
+        var entity = try this.create();
+        //TODO: optimize: put data directly into correct archetype
+        inline for (info.Struct.fields) |_, i| {
+            try this.put(entity, components[i]);
+        }
+        return entity;
+    }
+
     /// sync all added and removed data from temp storage to real
     /// this is called usually after each frame (after all before, update, after, ui steps).
     fn syncArchetypes(this: *@This()) !void {
