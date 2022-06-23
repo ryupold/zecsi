@@ -1,6 +1,5 @@
 const _ecs = @import("ecs/ecs.v2.zig");
 pub const ECS = _ecs.ECS;
-pub const Entity = _ecs.Entity;
 pub const EntityID = _ecs.EntityID;
 pub const ArchetypeIterator = _ecs.ArchetypeIterator;
 
