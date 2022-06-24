@@ -434,7 +434,7 @@ pub const ArchetypeStorage = struct {
             if (this.entityIndexMap.get(removed)) |index| {
                 // remove from entityIDs
                 std.debug.assert(this.entityIDs.swapRemove(index) == removed);
-                if (this.entityIDs.items.len > 0 and index < this.entityIDs.items.len - 1) {
+                if (this.entityIDs.items.len > 0 and index < this.entityIDs.items.len) {
                     const swappedEntity = this.entityIDs.items[index];
                     try this.entityIndexMap.put(swappedEntity, index);
                 }
