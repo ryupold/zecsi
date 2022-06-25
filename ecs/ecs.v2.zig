@@ -20,6 +20,7 @@ pub const ECS = struct {
     allocator: std.mem.Allocator,
     window: struct { size: struct { x: f32, y: f32 } = .{ .x = 100, .y = 100 } } = .{},
     systems: std.ArrayList(System),
+    removedSystems: std.StringArrayHashMap(void),
     nextEnitityID: EntityID = 1,
     entities: std.AutoArrayHashMap(EntityID, ArchetypeHash),
     removedEntities: std.AutoArrayHashMap(EntityID, void),
@@ -30,6 +31,7 @@ pub const ECS = struct {
         var ecs = @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
+            .removedSystems = std.StringArrayHashMap(void).init(allocator),
             .entities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
             .removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator),
             .archetypes = std.AutoArrayHashMap(ArchetypeHash, ArchetypeStorage).init(allocator),
@@ -47,6 +49,7 @@ pub const ECS = struct {
             sys.deinit();
         }
         this.systems.deinit();
+        this.removedSystems.deinit();
 
         for (this.archetypes.values()) |*archetypeStorage| {
             archetypeStorage.deinit();
@@ -199,6 +202,7 @@ pub const ECS = struct {
 
     //=== Systems =================================================================================
 
+    /// pointer is invalidated when you call `unregisterSystem` for `TSystem`
     pub fn getSystem(self: *@This(), comptime TSystem: type) ?*TSystem {
         for (self.systems.items) |sys| {
             if (std.mem.eql(u8, @typeName(TSystem), sys.name))
@@ -208,7 +212,7 @@ pub const ECS = struct {
     }
 
     /// Replace system instance with a copy of 'system's data
-    pub fn putSystem(self: *@This(), system: anytype) !void {
+    fn putSystem(self: *@This(), system: anytype) !void {
         const TSystem = @TypeOf(system);
         const tSystemInfo = @typeInfo(TSystem);
         comptime if (tSystemInfo != .Pointer and @typeInfo(tSystemInfo.Pointer.child) != .Struct) {
@@ -232,10 +236,25 @@ pub const ECS = struct {
 
         var s = try self.allocSystem(TSystem);
         try self.systems.append(s.ref);
-        comptime if (std.meta.trait.hasFn("load")(TSystem)) {
+        const hasLoad = comptime std.meta.trait.hasFn("load")(TSystem);
+        if (hasLoad) {
             try s.system.load();
-        };
+        }
         return s.system;
+    }
+
+    /// mark system for removal (happens at the end of frame)
+    pub fn unregisterSystem(self: *@This(), comptime TSystem: type) !void {
+        if (self.getSystem(TSystem) == null) {
+            return error.SystemNotFound;
+        }
+
+        for (self.systems.items) |*sys| {
+            if (std.mem.eql(u8, @typeName(TSystem), sys.name)) {
+                try self.removedSystems.put(sys.name, {});
+                return;
+            }
+        }
     }
 
     fn AllocSystemResult(comptime TSystem: type) type {
@@ -319,6 +338,16 @@ pub const ECS = struct {
         }
 
         try self.syncArchetypes();
+
+        for (self.removedSystems.keys()) |removed| {
+            for (self.systems.items) |sys, is| {
+                if (std.mem.eql(u8, removed, sys.name)) {
+                    self.systems.orderedRemove(is).deinit();
+                    break;
+                }
+            }
+        }
+        self.removedSystems.clearAndFree();
     }
 };
 
@@ -376,10 +405,11 @@ pub fn ArchetypeIterator(comptime arch: anytype) type {
 }
 
 pub const System = struct {
-    ///pointer to system instance
+    /// pointer to system instance
     ptr: usize,
     /// type name of the system
     name: []const u8,
+
     alignment: usize,
     deinitFn: fn (usize) void,
     beforeFn: ?fn (usize, f32) anyerror!void,
