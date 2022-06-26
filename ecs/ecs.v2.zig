@@ -118,7 +118,11 @@ pub const ECS = struct {
         var it = this.addedArchetypes.iterator();
         while (it.next()) |kv| {
             try kv.value_ptr.sync();
-            try this.archetypes.putNoClobber(kv.key_ptr.*, kv.value_ptr.*);
+            if (kv.value_ptr.count() > 0) {
+                try this.archetypes.putNoClobber(kv.key_ptr.*, kv.value_ptr.*);
+            } else {
+                kv.value_ptr.deinit();
+            }
         }
         this.addedArchetypes.clearAndFree();
 
@@ -165,6 +169,41 @@ pub const ECS = struct {
                     else => return err,
                 };
             }
+        } else {
+            return error.EntityNotFound;
+        }
+    }
+
+    pub fn remove(this: *@This(), entity: EntityID, comptime TComponent: type) !bool {
+        if (this.entities.get(entity)) |oldHash| {
+            var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
+            if (previousStorage) |oldStorage| {
+                if (!oldStorage.has(TComponent)) return false;
+
+                const newHash = combineArchetypeHash(oldHash, TComponent);
+                //after adding to new archetype, delete from old
+                defer oldStorage.delete(entity) catch unreachable;
+                var newStorage: *ArchetypeStorage = undefined;
+                //storage already exists
+                if (this.archetypes.getPtr(newHash)) |existingStorage| {
+                    // move entity to this storage
+                    // _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
+                    newStorage = existingStorage;
+                }
+                //storage is new, but already created in this frame
+                else if (this.addedArchetypes.getPtr(newHash)) |newlyAddedStorage| {
+                    // _ = try newlyAddedStorage.copyFromOldArchetype(entity, oldStorage.*);
+                    newStorage = newlyAddedStorage;
+                }
+                //storage for this archetype does not exist yet
+                else {
+                    try this.addedArchetypes.put(newHash, try ArchetypeStorage.initReduction(this.allocator, oldStorage.*, TComponent));
+                    newStorage = this.addedArchetypes.getPtr(newHash).?;
+                }
+                _ = try newStorage.copyFromOldArchetype(entity, oldStorage.*);
+                try this.entities.put(entity, newHash);
+            }
+            return true;
         } else {
             return error.EntityNotFound;
         }
@@ -234,6 +273,8 @@ pub const ECS = struct {
             return error.SystemAlreadyRegistered;
         }
 
+        std.debug.print("register {s}\n", .{@typeName(TSystem)});
+
         var s = try self.allocSystem(TSystem);
         try self.systems.append(s.ref);
         const hasLoad = comptime std.meta.trait.hasFn("load")(TSystem);
@@ -248,6 +289,8 @@ pub const ECS = struct {
         if (self.getSystem(TSystem) == null) {
             return error.SystemNotFound;
         }
+
+        std.debug.print("\tunregister {s}\n", .{@typeName(TSystem)});
 
         for (self.systems.items) |*sys| {
             if (std.mem.eql(u8, @typeName(TSystem), sys.name)) {
@@ -342,7 +385,8 @@ pub const ECS = struct {
         for (self.removedSystems.keys()) |removed| {
             for (self.systems.items) |sys, is| {
                 if (std.mem.eql(u8, removed, sys.name)) {
-                    self.systems.orderedRemove(is).deinit();
+                    var old = self.systems.orderedRemove(is);
+                    old.deinit();
                     break;
                 }
             }
@@ -400,6 +444,10 @@ pub fn ArchetypeIterator(comptime arch: anytype) type {
 
                 return this.next();
             }
+        }
+
+        pub fn reset(this: *@This()) void {
+            this.* = init(this.archetypes);
         }
     };
 }
@@ -574,6 +622,42 @@ test "query" {
     try expectEqual(entity3, nEntry.entity);
     try expectEqual(Name{ .name = "bar" }, nEntry.theName.*);
     try expect(nIterator.next() == null); // entity1 & entity3 have Name
+}
+
+test "remove" {
+    var ecs = try ECS.init(t.allocator);
+    defer ecs.deinit();
+
+    const entity1 = try ecs.create();
+    const entity2 = try ecs.create();
+
+    try ecs.put(entity1, Position{ .x = 1, .y = 2 });
+    try ecs.put(entity1, Name{ .name = "foobar" });
+    try ecs.put(entity2, Position{ .x = 2, .y = 3 });
+    try ecs.put(entity2, Target{ .x = 3, .y = 6 });
+    try expectEqual(@as(usize, 1), ecs.archetypes.count());
+    try expectEqual(@as(usize, 3), ecs.addedArchetypes.count());
+
+    try ecs.syncArchetypes();
+
+    try expectEqual(@as(usize, 0), ecs.addedArchetypes.count());
+    // all archetypes created along the way
+    try expectEqual(@as(usize, 3), ecs.archetypes.count());
+    try expectEqual(archetypeHash(.{}), ecs.archetypes.keys()[0]);
+    try expectEqual(archetypeHash(.{ Position, Name }), ecs.archetypes.keys()[1]);
+    try expectEqual(archetypeHash(.{ Position, Target }), ecs.archetypes.keys()[2]);
+
+    try expectEqual(ecs.entities.get(entity1).?, archetypeHash(.{ Position, Name }));
+    try expectEqual(ecs.entities.get(entity2).?, archetypeHash(.{ Position, Target }));
+
+    try expect(try ecs.remove(entity1, Position));
+    try expectEqual(ecs.entities.get(entity1).?, archetypeHash(.{Name}));
+    try expectEqual(archetypeHash(.{Name}), ecs.addedArchetypes.keys()[0]);
+
+    try ecs.syncArchetypes();
+
+    try expect(ecs.get(entity1, Position) == null);
+    try expectEqual(archetypeHash(.{Name}), ecs.archetypes.keys()[3]);
 }
 
 const ExampleSystem = struct {

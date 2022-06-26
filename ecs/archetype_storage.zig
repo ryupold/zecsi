@@ -179,6 +179,17 @@ pub const ArchetypeStorage = struct {
         return extension;
     }
 
+    /// create a new storage based on `subset`s template and `addColumn(AdditionalComponentType)`
+    pub fn initReduction(allocator: std.mem.Allocator, subset: @This(), comptime WithoutComponentType: type) !@This() {
+        var reduction = try init(allocator);
+        var iterator = subset.data.iterator();
+        while (iterator.next()) |column| {
+            if (typeId(WithoutComponentType) != column.key_ptr.*)
+                try column.value_ptr.addToOtherStorage(&reduction);
+        }
+        return reduction;
+    }
+
     /// add a column to a newly created ArchetypeStorage
     pub fn addColumn(this: *@This(), comptime TComponent: type) error{ OutOfMemory, AlreadyContainsComponentType, StorageAlreadyContainsData }!void {
         if (this.has(TComponent)) return error.AlreadyContainsComponentType;
@@ -192,6 +203,15 @@ pub const ArchetypeStorage = struct {
             typeId(TComponent),
             try ArchetypeColumn.init(this.allocator, TComponent),
         );
+        this.hash = combineArchetypeHash(this.hash, .{TComponent});
+    }
+
+    pub fn removeColumn(this: *@This(), comptime TComponent: type) void {
+        if (!this.has(TComponent)) return error.DoesNotContainComponentType;
+        if (this.entityIDs.items.len > 0 or this.addedEntityIDs.items.len > 0) return error.StorageAlreadyContainsData;
+
+        try this.data.swapRemove(typeId(TComponent));
+        try this.addedData.swapRemove(typeId(TComponent));
         this.hash = combineArchetypeHash(this.hash, .{TComponent});
     }
 
@@ -303,8 +323,7 @@ pub const ArchetypeStorage = struct {
     pub fn copyFromOldArchetype(this: *@This(), entity: EntityID, oldStorage: ArchetypeStorage) !usize {
         if (this.removedEntities.contains(entity)) {
             _ = this.removedEntities.swapRemove(entity);
-        }
-        else if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
+        } else if (this.entityIndexMap.contains(entity)) return error.AlreadyContainsEntity;
 
         const index = this.addedEntityIDs.items.len;
 
@@ -941,6 +960,11 @@ test "combineArchetypeHash" {
     try expectEqual(
         archetypeHash(.{ Position, Target, Name }),
         combineArchetypeHash(archetypeHash(.{Name}), .{ Target, Position }),
+    );
+
+    try expectEqual(
+        archetypeHash(.{Name}),
+        combineArchetypeHash(archetypeHash(.{ Name, Target, Position }), .{ Target, Position }),
     );
 }
 

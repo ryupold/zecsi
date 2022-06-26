@@ -1,7 +1,10 @@
 const _ecs = @import("ecs/ecs.v2.zig");
+const archetype = @import("ecs/archetype_storage.zig");
 pub const ECS = _ecs.ECS;
 pub const EntityID = _ecs.EntityID;
 pub const ArchetypeIterator = _ecs.ArchetypeIterator;
+pub const ArchetypeSlices = archetype.ArchetypeSlices;
+pub const ArchetypeEntry = archetype.ArchetypeEntry;
 
 pub const game = @import("game.zig");
 
@@ -14,7 +17,7 @@ pub const inputHandlers = @import("./input_handlers.zig");
 
 pub const raylib = @import("raylib/raylib.zig");
 
-pub const baseSystems = struct{
+pub const baseSystems = struct {
     usingnamespace @import("systems/camera_system.zig");
     usingnamespace @import("systems/camera_system_3d.zig");
     usingnamespace @import("systems/asset_system.zig");
