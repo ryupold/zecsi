@@ -97,7 +97,7 @@ pub const ECS = struct {
         return entity;
     }
 
-    /// destroy entity (after `syncArchetypes`)
+    /// destroy entity (after `syncEntities`)
     pub fn destroy(this: *@This(), entity: EntityID) !void {
         if (this.entities.get(entity)) |hash| {
             var anyStorage = this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash);
@@ -108,9 +108,15 @@ pub const ECS = struct {
         }
     }
 
-    /// sync all added and removed data from temp storage to real
+    /// syncs all entity/component changes
+    /// (sync all added and removed data from temp storage to real)
+    /// after that:
+    /// - newly created entities can be queried
+    /// - deleted entities are deleted permanently
+    ///
     /// this is called usually after each frame (after all before, update, after, ui steps).
-    fn syncArchetypes(this: *@This()) !void {
+    /// **NOTE: never call this function inside a query loop. it will invalidate the `ArchetypeIterator`**
+    pub fn syncEntities(this: *@This()) !void {
         for (this.archetypes.values()) |*archetype| {
             try archetype.sync();
         }
@@ -134,6 +140,8 @@ pub const ECS = struct {
 
     //=== Component ===============================================================================
 
+    /// if not present, add a `component` to the `entity` (after sync)
+    /// otherwise override current component value (instant)
     pub fn put(this: *@This(), entity: EntityID, component: anytype) !void {
         if (this.entities.get(entity)) |oldHash| {
             var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
@@ -174,6 +182,7 @@ pub const ECS = struct {
         }
     }
 
+    /// remove component of type `TComponent` from `entity`
     pub fn remove(this: *@This(), entity: EntityID, comptime TComponent: type) !bool {
         if (this.entities.get(entity)) |oldHash| {
             var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
@@ -209,11 +218,13 @@ pub const ECS = struct {
         }
     }
 
+    /// get copy of current component data of `entity`
     pub fn get(this: *@This(), entity: EntityID, comptime TComponent: type) ?TComponent {
         if (this.getPtr(entity, TComponent)) |ptr| return ptr.*;
         return null;
     }
 
+    /// get a pointer to the component data of `entity` (invalidates after `syncEntities`)
     pub fn getPtr(this: *@This(), entity: EntityID, comptime TComponent: type) ?*TComponent {
         if (this.entities.get(entity)) |hash| {
             if (this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash)) |archStorage| {
@@ -230,6 +241,16 @@ pub const ECS = struct {
             std.debug.panic("Entity #{d} does not exist", .{entity});
         }
         return null;
+    }
+
+    /// true if `entity` has this component, else false
+    pub fn has(this: *@This(), entity: EntityID, comptime TComponent: type) bool {
+        if (this.entities.get(entity)) |hash| {
+            const store = this.archetypes.get(hash) orelse this.addedArchetypes.get(hash) orelse return false;
+
+            return store.has(TComponent);
+        }
+        return false;
     }
 
     //=== Query ===================================================================================
@@ -380,7 +401,7 @@ pub const ECS = struct {
             try system.ui(dt);
         }
 
-        try self.syncArchetypes();
+        try self.syncEntities();
 
         for (self.removedSystems.keys()) |removed| {
             for (self.systems.items) |sys, is| {
@@ -395,6 +416,12 @@ pub const ECS = struct {
     }
 };
 
+/// iterates over all entities matching a subset of given archetype
+/// returned entries are valid until next `syncEntities` call
+/// usage:
+/// ```
+/// 
+/// ```
 pub fn ArchetypeIterator(comptime arch: anytype) type {
     return struct {
         archetypeIndex: usize,
@@ -452,7 +479,7 @@ pub fn ArchetypeIterator(comptime arch: anytype) type {
     };
 }
 
-pub const System = struct {
+const System = struct {
     /// pointer to system instance
     ptr: usize,
     /// type name of the system
@@ -550,7 +577,7 @@ test "syncArchetypes" {
     try expectEqual(@as(usize, 1), ecs.archetypes.count());
     try expectEqual(@as(usize, 2), ecs.addedArchetypes.count());
 
-    try ecs.syncArchetypes();
+    try ecs.syncEntities();
 
     try expectEqual(@as(usize, 0), ecs.addedArchetypes.count());
     // all archetypes created along the way
@@ -576,7 +603,7 @@ test "get component data from entity" {
     try expectEqual(Position{ .x = 1, .y = 2 }, ecs.get(entity, Position).?);
     try expectEqual(Name{ .name = "foobar" }, ecs.get(entity, Name).?);
 
-    try ecs.syncArchetypes();
+    try ecs.syncEntities();
 
     // and after sync
     try expectEqual(Position{ .x = 1, .y = 2 }, ecs.get(entity, Position).?);
@@ -596,7 +623,7 @@ test "query" {
     try ecs.put(entity2, Position{ .x = 2, .y = 3 });
     try ecs.put(entity3, Name{ .name = "bar" });
 
-    try ecs.syncArchetypes();
+    try ecs.syncEntities();
 
     var pnIterator = ecs.query(.{ .{ "pos", Position }, .{ "name", Name } });
     const pnEntry = pnIterator.next().?;
@@ -638,7 +665,7 @@ test "remove" {
     try expectEqual(@as(usize, 1), ecs.archetypes.count());
     try expectEqual(@as(usize, 3), ecs.addedArchetypes.count());
 
-    try ecs.syncArchetypes();
+    try ecs.syncEntities();
 
     try expectEqual(@as(usize, 0), ecs.addedArchetypes.count());
     // all archetypes created along the way
@@ -654,7 +681,7 @@ test "remove" {
     try expectEqual(ecs.entities.get(entity1).?, archetypeHash(.{Name}));
     try expectEqual(archetypeHash(.{Name}), ecs.addedArchetypes.keys()[0]);
 
-    try ecs.syncArchetypes();
+    try ecs.syncEntities();
 
     try expect(ecs.get(entity1, Position) == null);
     try expectEqual(archetypeHash(.{Name}), ecs.archetypes.keys()[3]);
