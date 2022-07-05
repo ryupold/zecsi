@@ -19,6 +19,7 @@ const ArchetypeSlices = storage.ArchetypeSlices;
 pub const ECS = struct {
     allocator: std.mem.Allocator,
     window: struct { size: struct { x: f32, y: f32 } = .{ .x = 100, .y = 100 } } = .{},
+    addedSystems: std.ArrayList(System),
     systems: std.ArrayList(System),
     removedSystems: std.StringArrayHashMap(void),
     nextEnitityID: EntityID = 1,
@@ -31,6 +32,7 @@ pub const ECS = struct {
         var ecs = @This(){
             .allocator = allocator,
             .systems = std.ArrayList(System).init(allocator),
+            .addedSystems = std.ArrayList(System).init(allocator),
             .removedSystems = std.StringArrayHashMap(void).init(allocator),
             .entities = std.AutoArrayHashMap(EntityID, ArchetypeHash).init(allocator),
             .removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator),
@@ -45,11 +47,17 @@ pub const ECS = struct {
     }
 
     pub fn deinit(this: *@This()) void {
+        this.syncSystems() catch |err| {
+            if (builtin.mode == .Debug) {
+                std.debug.panic("ERROR: {any}", .{err});
+            }
+        };
         for (this.systems.items) |*sys| {
             sys.deinit();
         }
-        this.systems.deinit();
         this.removedSystems.deinit();
+        this.addedSystems.deinit();
+        this.systems.deinit();
 
         for (this.archetypes.values()) |*archetypeStorage| {
             archetypeStorage.deinit();
@@ -136,6 +144,24 @@ pub const ECS = struct {
             std.debug.assert(this.entities.swapRemove(removed));
         }
         this.removedEntities.clearAndFree();
+    }
+
+    fn syncSystems(self: *@This()) !void {
+        // remove marked systems
+        while (self.removedSystems.popOrNull()) |removed| {
+            for (self.systems.items) |sys, is| {
+                if (std.mem.eql(u8, removed.key, sys.name)) {
+                    self.systems.orderedRemove(is).deinit();
+                    break;
+                }
+            }
+        }
+
+        // add new systems
+        while (self.addedSystems.popOrNull()) |*added| {
+            try self.systems.append(added.*);
+            try added.load();
+        }
     }
 
     //=== Component ===============================================================================
@@ -256,6 +282,19 @@ pub const ECS = struct {
     //=== Query ===================================================================================
 
     /// query all **synced** archetypes for entities with component types in `arch` tuple
+    /// usage:
+    /// ```
+    /// var iterator = this.ecs.query(.{
+    ///     .{ "compA", TComponentA },
+    ///     .{ "compB", TComponentB },
+    /// });
+    /// while (iterator.next()) |e| {
+    ///     var a: *TComponentA = e.compA;
+    ///     var b: *TComponentB = e.compB;
+    ///     ...
+    /// }
+    ///
+    /// ```
     pub fn query(this: *@This(), comptime arch: anytype) ArchetypeIterator(arch) {
         return ArchetypeIterator(arch).init(this.archetypes.values());
     }
@@ -264,14 +303,22 @@ pub const ECS = struct {
 
     /// pointer is invalidated when you call `unregisterSystem` for `TSystem`
     pub fn getSystem(self: *@This(), comptime TSystem: type) ?*TSystem {
+        if (self.removedSystems.contains(@typeName(TSystem))) {
+            return null;
+        }
         for (self.systems.items) |sys| {
             if (std.mem.eql(u8, @typeName(TSystem), sys.name))
                 return @intToPtr(*TSystem, sys.ptr);
         }
+        for (self.addedSystems.items) |sys| {
+            if (std.mem.eql(u8, @typeName(TSystem), sys.name))
+                return @intToPtr(*TSystem, sys.ptr);
+        }
+
         return null;
     }
 
-    /// Replace system instance with a copy of 'system's data
+    /// Replace system instance with a copy of `system`s data
     fn putSystem(self: *@This(), system: anytype) !void {
         const TSystem = @TypeOf(system);
         const tSystemInfo = @typeInfo(TSystem);
@@ -287,30 +334,56 @@ pub const ECS = struct {
         }
     }
 
-    /// Create a new system instance and add it to the system pool
-    /// Return previous instance if already registered
+    /// Create a new system instance and add it to the system pool.
+    /// `TSystem.init` is called in this method
+    /// ```
+    /// pub const MinimalSystem = struct {
+    ///     ecs: *ECS,
+    ///
+    ///     pub fn init(ecs: *ECS) !@This() {
+    ///         return @This(){ .ecs = ecs };
+    ///     }
+    ///
+    ///     pub fn deinit(this: *@This()) void {}
+    ///
+    ///     //optional: called after the system was integrated in loop, shortly before first update
+    ///     // pub fn load(this: *@This()) !void {}
+    ///
+    ///     //optional: called before all update's
+    ///     // pub fn before(this: *@This(), dt: f32) !void {}
+    ///
+    ///     //optional: called each frame
+    ///     // pub fn update(this: *@This(), dt: f32) !void {}
+    ///
+    ///     //optional: called after all update's
+    ///     // pub fn after(this: *@This(), dt: f32) !void {}
+    ///
+    ///     //optional: called after all before, update, after
+    ///     // pub fn ui(this: *@This(), dt: f32) !void {}
+    /// };
+    /// ```
     pub fn registerSystem(self: *@This(), comptime TSystem: type) !*TSystem {
+        std.debug.print("register {s}\n", .{@typeName(TSystem)});
+
+        if (self.removedSystems.contains(@typeName(TSystem))) {
+            _ = self.removedSystems.swapRemove(@typeName(TSystem));
+            return self.getSystem(TSystem).?;
+        }
+
         if (self.getSystem(TSystem) != null) {
             return error.SystemAlreadyRegistered;
         }
 
-        std.debug.print("register {s}\n", .{@typeName(TSystem)});
-
         var s = try self.allocSystem(TSystem);
-        try self.systems.append(s.ref);
-        const hasLoad = comptime std.meta.trait.hasFn("load")(TSystem);
-        if (hasLoad) {
-            try s.system.load();
-        }
+        try self.addedSystems.append(s.ref);
+        try s.ref.init(self);
+
         return s.system;
     }
 
     /// mark system for removal (happens at the end of frame)
+    /// `deinit` is called shortly before the system is removed
     pub fn unregisterSystem(self: *@This(), comptime TSystem: type) !void {
-        if (self.getSystem(TSystem) == null) {
-            return error.SystemNotFound;
-        }
-
         std.debug.print("\tunregister {s}\n", .{@typeName(TSystem)});
 
         for (self.systems.items) |*sys| {
@@ -319,6 +392,8 @@ pub const ECS = struct {
                 return;
             }
         }
+
+        return error.SystemNotFound;
     }
 
     fn AllocSystemResult(comptime TSystem: type) type {
@@ -332,18 +407,29 @@ pub const ECS = struct {
     fn allocSystem(self: *@This(), comptime TSystem: type) !AllocSystemResult(TSystem) {
         var system: *TSystem = try self.allocator.create(TSystem);
         errdefer self.allocator.destroy(system);
-        system.* = try TSystem.init(self);
+        // system.* = try TSystem.init(self);
 
         const gen = struct {
+            const hasLoad = std.meta.trait.hasFn("load")(TSystem);
             const hasBefore = std.meta.trait.hasFn("before")(TSystem);
             const hasUpdate = std.meta.trait.hasFn("update")(TSystem);
             const hasAfter = std.meta.trait.hasFn("after")(TSystem);
             const hasUI = std.meta.trait.hasFn("ui")(TSystem);
 
+            pub fn initImpl(ecs: *ECS, ptr: usize) !void {
+                const this = @intToPtr(*TSystem, ptr);
+                this.* = try TSystem.init(ecs);
+            }
+
             pub fn deinitImpl(ptr: usize) void {
                 const this = @intToPtr(*TSystem, ptr);
                 this.deinit();
                 this.ecs.allocator.destroy(this);
+            }
+
+            pub fn loadImpl(ptr: usize) !void {
+                const this = @intToPtr(*TSystem, ptr);
+                if (hasLoad) try this.load();
             }
 
             pub fn beforeImpl(ptr: usize, dt: f32) !void {
@@ -368,7 +454,9 @@ pub const ECS = struct {
             .ptr = @ptrToInt(system),
             .name = @typeName(TSystem),
             .alignment = @alignOf(TSystem),
+            .initFn = gen.initImpl,
             .deinitFn = gen.deinitImpl,
+            .loadFn = if (std.meta.trait.hasFn("load")(TSystem)) gen.loadImpl else null,
             .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) gen.beforeImpl else null,
             .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) gen.updateImpl else null,
             .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) gen.afterImpl else null,
@@ -403,16 +491,7 @@ pub const ECS = struct {
 
         try self.syncEntities();
 
-        for (self.removedSystems.keys()) |removed| {
-            for (self.systems.items) |sys, is| {
-                if (std.mem.eql(u8, removed, sys.name)) {
-                    var old = self.systems.orderedRemove(is);
-                    old.deinit();
-                    break;
-                }
-            }
-        }
-        self.removedSystems.clearAndFree();
+        try self.syncSystems();
     }
 };
 
@@ -420,7 +499,7 @@ pub const ECS = struct {
 /// returned entries are valid until next `syncEntities` call
 /// usage:
 /// ```
-/// 
+///
 /// ```
 pub fn ArchetypeIterator(comptime arch: anytype) type {
     return struct {
@@ -486,14 +565,24 @@ const System = struct {
     name: []const u8,
 
     alignment: usize,
+    initFn: fn (*ECS, usize) anyerror!void,
     deinitFn: fn (usize) void,
+    loadFn: ?fn (usize) anyerror!void,
     beforeFn: ?fn (usize, f32) anyerror!void,
     updateFn: ?fn (usize, f32) anyerror!void,
     afterFn: ?fn (usize, f32) anyerror!void,
     uiFn: ?fn (usize, f32) anyerror!void,
 
+    pub fn init(self: *@This(), ecs: *ECS) !void {
+        try @call(.{}, self.initFn, .{ ecs, self.ptr });
+    }
+
     pub fn deinit(self: *@This()) void {
         @call(.{}, self.deinitFn, .{self.ptr});
+    }
+
+    pub fn load(self: *@This()) !void {
+        if (self.loadFn) |loadFn| try @call(.{}, loadFn, .{self.ptr});
     }
 
     pub fn before(self: *@This(), dt: f32) !void {
@@ -697,6 +786,8 @@ const ExampleSystem = struct {
     }
 
     pub fn deinit(_: *@This()) void {}
+
+    pub fn load(_: *@This()) void {}
 
     pub fn before(self: *@This(), dt: f32) !void {
         self.testState -= dt;
