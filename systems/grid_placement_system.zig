@@ -12,9 +12,11 @@ const JsonObject = @import("../assets.zig").JsonObject;
 
 pub const Vector2 = r.Vector2;
 
+pub const GridDirection = enum { right, down, left, up };
+
 pub const GridPosition = struct {
-    x: i32,
-    y: i32,
+    x: i32 = 0,
+    y: i32 = 0,
 
     pub fn zero() @This() {
         return .{ .x = 0, .y = 0 };
@@ -74,6 +76,15 @@ pub const GridPosition = struct {
     }
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
+    }
+
+    pub fn move(self: @This(), in: GridDirection) GridPosition {
+        return switch (in) {
+            .right => .{ .x = self.x + 1, .y = self.y },
+            .down => .{ .x = self.x, .y = self.y + 1 },
+            .left => .{ .x = self.x - 1, .y = self.y },
+            .up => .{ .x = self.x, .y = self.y - 1 },
+        };
     }
 };
 
