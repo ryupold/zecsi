@@ -12,7 +12,30 @@ const JsonObject = @import("../assets.zig").JsonObject;
 
 pub const Vector2 = r.Vector2;
 
-pub const GridDirection = enum { right, down, left, up };
+pub const GridDirection = enum {
+    right,
+    down,
+    left,
+    up,
+
+    pub fn turnLeft(this: @This()) @This() {
+        return switch (this) {
+            .right => .up,
+            .down => .right,
+            .left => .down,
+            .up => .left,
+        };
+    }
+    
+    pub fn turnRight(this: @This()) @This() {
+        return switch (this) {
+            .right => .down,
+            .down => .left,
+            .left => .up,
+            .up => .right,
+        };
+    }
+};
 
 pub const GridPosition = struct {
     x: i32 = 0,
