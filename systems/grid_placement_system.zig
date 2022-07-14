@@ -12,12 +12,14 @@ const JsonObject = @import("../assets.zig").JsonObject;
 
 pub const Vector2 = r.Vector2;
 
+/// absolute direction (bird eye view on the grid)
 pub const GridDirection = enum {
     right,
     down,
     left,
     up,
 
+    /// turn left relative to `this` direction
     pub fn turnLeft(this: @This()) @This() {
         return switch (this) {
             .right => .up,
@@ -26,7 +28,8 @@ pub const GridDirection = enum {
             .up => .left,
         };
     }
-    
+
+    /// turn right relative to `this` direction
     pub fn turnRight(this: @This()) @This() {
         return switch (this) {
             .right => .down,
@@ -45,9 +48,20 @@ pub const GridPosition = struct {
         return .{ .x = 0, .y = 0 };
     }
 
+    pub fn neigbour(self: @This(), in: GridDirection) GridPosition {
+        return switch (in) {
+            .right => .{ .x = self.x + 1, .y = self.y },
+            .down => .{ .x = self.x, .y = self.y + 1 },
+            .left => .{ .x = self.x - 1, .y = self.y },
+            .up => .{ .x = self.x, .y = self.y - 1 },
+        };
+    }
+
+    ///```
     /// [0] [1] [2]
     /// [7] [X] [3]
     /// [6] [5] [4]
+    ///```
     pub fn neigbours(self: @This()) [8]GridPosition {
         const x = self.x;
         const y = self.y;
@@ -63,9 +77,11 @@ pub const GridPosition = struct {
         };
     }
 
+    ///```
     /// --- [0] ---
     /// [3] [X] [1]
     /// --- [2] ---
+    ///```
     pub fn crossNeigbours(self: @This()) [4]GridPosition {
         const x = self.x;
         const y = self.y;
@@ -77,9 +93,11 @@ pub const GridPosition = struct {
         };
     }
 
+    ///```
     /// [0] --- [1]
     /// --- [X] ---
     /// [3] --- [2]
+    ///```
     pub fn diagonalNeigbours(self: @This()) [4]GridPosition {
         const x = self.x;
         const y = self.y;
@@ -99,15 +117,6 @@ pub const GridPosition = struct {
     }
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
-    }
-
-    pub fn move(self: @This(), in: GridDirection) GridPosition {
-        return switch (in) {
-            .right => .{ .x = self.x + 1, .y = self.y },
-            .down => .{ .x = self.x, .y = self.y + 1 },
-            .left => .{ .x = self.x - 1, .y = self.y },
-            .up => .{ .x = self.x, .y = self.y - 1 },
-        };
     }
 };
 
