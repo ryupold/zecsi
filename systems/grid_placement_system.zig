@@ -118,6 +118,16 @@ pub const GridPosition = struct {
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
     }
+
+    pub fn format(pos: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+        var buffer: [128]u8 = undefined;
+
+        const str = try std.fmt.bufPrint(&buffer, "[{d}, {d}]", .{ pos.x, pos.y });
+
+        _ = try writer.writeAll(str);
+    }
 };
 
 const GridConfig = struct {
