@@ -7,7 +7,7 @@ small framework with [raylib](https://www.raylib.com/) bindings and own [ECS](ht
 
 ### dependencies
 - git
-- [zig (0.9.1)](https://ziglang.org/documentation/0.9.1/)
+- [zig (0.10.0)](https://ziglang.org/documentation/master/)
 - emscripten sdk (if you intend to build for webassembly)
 
 ### run locally
@@ -42,13 +42,8 @@ The output files will be in `./zig-out/web/`
 The game data needs to be served with a webserver. Just opening the game.html in a browser won't work
 
 ## raylib bindings
-To generate new bindings you need to add them to `ray/bindings.js`
-then run:
-```sh
-node bindings.js
-```
-The resulting function will be in `ray/gen.zig`
-
+This library uses [raylib.zig](https://github.com/ryupold/raylib.zig) bindings.
+See [build.zig](https://github.com/ryupold/zecsi-example/blob/main/build.zig) for how to include them in your project.
 
 ## TODOs
 
