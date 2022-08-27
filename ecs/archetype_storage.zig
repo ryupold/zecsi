@@ -16,12 +16,12 @@ const ArchetypeColumn = struct {
     allocator: std.mem.Allocator,
     column: *anyopaque,
     len: usize = 0,
-    _append: fn (this: *@This()) std.mem.Allocator.Error!usize,
-    _copyFrom: fn (this: *@This(), from: *@This(), fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize,
-    _remove: fn (this: *@This(), index: usize) void,
-    _clear: fn (this: *@This()) void,
-    _addToOtherStorage: fn (storage: *ArchetypeStorage) anyerror!void,
-    _deinit: fn (this: *@This()) void,
+    _append: *const fn (this: *@This()) std.mem.Allocator.Error!usize,
+    _copyFrom: *const fn (this: *@This(), from: *@This(), fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize,
+    _remove: *const fn (this: *@This(), index: usize) void,
+    _clear: *const fn (this: *@This()) void,
+    _addToOtherStorage: *const fn (storage: *ArchetypeStorage) anyerror!void,
+    _deinit: *const fn (this: *@This()) void,
 
     /// create a column for components of type `TComponent`
     pub fn init(allocator: std.mem.Allocator, comptime TComponent: type) !@This() {
@@ -32,7 +32,7 @@ const ArchetypeColumn = struct {
             .typ = typeId(TComponent),
             .allocator = allocator,
             .column = @ptrCast(*anyopaque, columnPtr),
-            ._append = (struct {
+            ._append = &(struct {
                 fn append(column: *ArchetypeColumn) std.mem.Allocator.Error!usize {
                     var list = column.cast(TComponent) catch unreachable;
                     _ = try list.addOne();
@@ -40,33 +40,33 @@ const ArchetypeColumn = struct {
                     return list.items.len - 1;
                 }
             }).append,
-            ._copyFrom = (struct {
+            ._copyFrom = &(struct {
                 fn copyFrom(column: *ArchetypeColumn, from: *ArchetypeColumn, fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize {
                     var fromList = try from.cast(TComponent);
                     try column.append(fromList.items[fromIndex]);
                     return column.len - 1;
                 }
             }).copyFrom,
-            ._remove = (struct {
+            ._remove = &(struct {
                 fn remove(column: *ArchetypeColumn, index: usize) void {
                     var list = column.cast(TComponent) catch unreachable;
                     _ = list.swapRemove(index);
                     column.len = list.items.len;
                 }
             }).remove,
-            ._clear = (struct {
+            ._clear = &(struct {
                 fn clear(column: *ArchetypeColumn) void {
                     var list = column.cast(TComponent) catch unreachable;
                     list.clearAndFree();
                     column.len = 0;
                 }
             }).clear,
-            ._addToOtherStorage = (struct {
+            ._addToOtherStorage = &(struct {
                 fn addToOtherStorage(storage: *ArchetypeStorage) !void {
                     try storage.addColumn(TComponent);
                 }
             }).addToOtherStorage,
-            ._deinit = (struct {
+            ._deinit = &(struct {
                 fn deinit(column: *ArchetypeColumn) void {
                     var list = column.cast(TComponent) catch unreachable;
                     list.deinit();
@@ -79,7 +79,7 @@ const ArchetypeColumn = struct {
 
     /// free the underlying component list
     pub fn deinit(this: *@This()) void {
-        this._deinit(this);
+        this._deinit.*(this);
     }
 
     /// add new component to this column
@@ -92,7 +92,7 @@ const ArchetypeColumn = struct {
 
     /// append one uninitialized entry and return index to it
     pub fn addOne(this: *@This()) !usize {
-        return try this._append(this);
+        return try this._append.*(this);
     }
 
     /// set component data at `index`
@@ -115,17 +115,17 @@ const ArchetypeColumn = struct {
 
     /// performs a `swapRemove` on the underlying list
     pub fn remove(this: *@This(), index: usize) void {
-        this._remove(this, index);
+        this._remove.*(this, index);
     }
 
     /// remove all entries in this column
     pub fn clear(this: *@This()) void {
-        this._clear(this);
+        this._clear.*(this);
     }
 
     /// append new entry to this column by copying data `from` other column at `fromIndex`
     pub fn copyFrom(this: *@This(), from: *@This(), fromIndex: usize) !usize {
-        return try this._copyFrom(this, from, fromIndex);
+        return try this._copyFrom.*(this, from, fromIndex);
     }
 
     /// cast column pointer to arraylist pointer of `TComponent` (if possible)
@@ -136,7 +136,7 @@ const ArchetypeColumn = struct {
 
     /// create a empty column with same type information
     fn addToOtherStorage(this: @This(), storage: *ArchetypeStorage) !void {
-        return try this._addToOtherStorage(storage);
+        return try this._addToOtherStorage.*(storage);
     }
 };
 

@@ -6,8 +6,8 @@ const raylib = zecsi.raylib;
 const base = zecsi.baseSystems;
 
 pub const Scene = struct {
-    init: fn (ecs: *zecsi.ECS) anyerror!void,
-    deinit: fn (ecs: *zecsi.ECS) anyerror!void,
+    init: *const fn (ecs: *zecsi.ECS) anyerror!void,
+    deinit: *const fn (ecs: *zecsi.ECS) anyerror!void,
 };
 
 pub const SceneSystem = struct {
@@ -24,7 +24,7 @@ pub const SceneSystem = struct {
     pub fn deinit(this: *@This()) void {
         if (this.currentScene) |current| {
             this.currentScene = null;
-            current.deinit(this.ecs) catch unreachable;
+            current.deinit.*(this.ecs) catch unreachable;
         }
     }
 
@@ -33,7 +33,7 @@ pub const SceneSystem = struct {
             if (std.meta.eql(current, scene)) return;
             log.info("========= unload scene =========\n", .{});
             this.currentScene = null;
-            try current.deinit(this.ecs);
+            try current.deinit.*(this.ecs);
         }
         this.nextLoadScene = scene;
     }
@@ -41,7 +41,7 @@ pub const SceneSystem = struct {
     pub fn ui(this: *@This(), _: f32) !void {
         if (this.nextLoadScene) |next| {
             log.info("========= load scene =========\n", .{});
-            try next.init(this.ecs);
+            try next.init.*(this.ecs);
             this.currentScene = next;
             this.nextLoadScene = null;
         }

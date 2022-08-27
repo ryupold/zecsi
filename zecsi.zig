@@ -18,10 +18,10 @@ pub const inputHandlers = @import("./input_handlers.zig");
 pub const raylib = @import("raylib/raylib.zig");
 
 pub const baseSystems = struct {
-    usingnamespace @import("systems/camera_system.zig");
-    usingnamespace @import("systems/camera_system_3d.zig");
-    usingnamespace @import("systems/asset_system.zig");
-    usingnamespace @import("systems/grid_placement_system.zig");
-    usingnamespace @import("systems/ui/ui_system.zig");
-    usingnamespace @import("systems/scene_system.zig");
+    pub usingnamespace @import("systems/camera_system.zig");
+    pub usingnamespace @import("systems/camera_system_3d.zig");
+    pub usingnamespace @import("systems/asset_system.zig");
+    pub usingnamespace @import("systems/grid_placement_system.zig");
+    pub usingnamespace @import("systems/ui/ui_system.zig");
+    pub usingnamespace @import("systems/scene_system.zig");
 };

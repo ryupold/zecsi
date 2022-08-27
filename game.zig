@@ -13,8 +13,8 @@ var windowsInitialized = false;
 var screenWidth: i32 = 100;
 var screenHeight: i32 = 100;
 var ecsInitialized = false;
-var ecs: *_ecs.ECS = undefined;
 var config: GameConfig = undefined;
+var ecs: *_ecs.ECS = undefined;
 
 pub fn getECS() *_ecs.ECS {
     if (!ecsInitialized) @panic("call init first to initialize a game");

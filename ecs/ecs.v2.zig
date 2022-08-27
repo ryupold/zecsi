@@ -454,13 +454,13 @@ pub const ECS = struct {
             .ptr = @ptrToInt(system),
             .name = @typeName(TSystem),
             .alignment = @alignOf(TSystem),
-            .initFn = gen.initImpl,
-            .deinitFn = gen.deinitImpl,
-            .loadFn = if (std.meta.trait.hasFn("load")(TSystem)) gen.loadImpl else null,
-            .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) gen.beforeImpl else null,
-            .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) gen.updateImpl else null,
-            .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) gen.afterImpl else null,
-            .uiFn = if (std.meta.trait.hasFn("ui")(TSystem)) gen.uiImpl else null,
+            .initFn = &gen.initImpl,
+            .deinitFn = &gen.deinitImpl,
+            .loadFn = if (std.meta.trait.hasFn("load")(TSystem)) &gen.loadImpl else null,
+            .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) &gen.beforeImpl else null,
+            .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) &gen.updateImpl else null,
+            .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) &gen.afterImpl else null,
+            .uiFn = if (std.meta.trait.hasFn("ui")(TSystem)) &gen.uiImpl else null,
         };
 
         return AllocSystemResult(TSystem){
@@ -565,40 +565,40 @@ const System = struct {
     name: []const u8,
 
     alignment: usize,
-    initFn: fn (*ECS, usize) anyerror!void,
-    deinitFn: fn (usize) void,
-    loadFn: ?fn (usize) anyerror!void,
-    beforeFn: ?fn (usize, f32) anyerror!void,
-    updateFn: ?fn (usize, f32) anyerror!void,
-    afterFn: ?fn (usize, f32) anyerror!void,
-    uiFn: ?fn (usize, f32) anyerror!void,
+    initFn: *const fn (*ECS, usize) anyerror!void,
+    deinitFn: *const fn (usize) void,
+    loadFn: ?*const fn (usize) anyerror!void,
+    beforeFn: ?*const fn (usize, f32) anyerror!void,
+    updateFn: ?*const fn (usize, f32) anyerror!void,
+    afterFn: ?*const fn (usize, f32) anyerror!void,
+    uiFn: ?*const fn (usize, f32) anyerror!void,
 
     pub fn init(self: *@This(), ecs: *ECS) !void {
-        try @call(.{}, self.initFn, .{ ecs, self.ptr });
+        try @call(.{}, self.initFn.*, .{ ecs, self.ptr });
     }
 
     pub fn deinit(self: *@This()) void {
-        @call(.{}, self.deinitFn, .{self.ptr});
+        @call(.{}, self.deinitFn.*, .{self.ptr});
     }
 
     pub fn load(self: *@This()) !void {
-        if (self.loadFn) |loadFn| try @call(.{}, loadFn, .{self.ptr});
+        if (self.loadFn) |loadFn| try @call(.{}, loadFn.*, .{self.ptr});
     }
 
     pub fn before(self: *@This(), dt: f32) !void {
-        if (self.beforeFn) |beforeFn| try @call(.{}, beforeFn, .{ self.ptr, dt });
+        if (self.beforeFn) |beforeFn| try @call(.{}, beforeFn.*, .{ self.ptr, dt });
     }
 
     pub fn update(self: *@This(), dt: f32) !void {
-        if (self.updateFn) |updateFn| try @call(.{}, updateFn, .{ self.ptr, dt });
+        if (self.updateFn) |updateFn| try @call(.{}, updateFn.*, .{ self.ptr, dt });
     }
 
     pub fn after(self: *@This(), dt: f32) !void {
-        if (self.afterFn) |afterFn| try @call(.{}, afterFn, .{ self.ptr, dt });
+        if (self.afterFn) |afterFn| try @call(.{}, afterFn.*, .{ self.ptr, dt });
     }
 
     pub fn ui(self: *@This(), dt: f32) !void {
-        if (self.uiFn) |uiFn| try @call(.{}, uiFn, .{ self.ptr, dt });
+        if (self.uiFn) |uiFn| try @call(.{}, uiFn.*, .{ self.ptr, dt });
     }
 };
 
