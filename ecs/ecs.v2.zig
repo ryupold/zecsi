@@ -151,15 +151,17 @@ pub const ECS = struct {
         while (self.removedSystems.popOrNull()) |removed| {
             for (self.systems.items) |sys, is| {
                 if (std.mem.eql(u8, removed.key, sys.name)) {
-                    self.systems.orderedRemove(is).deinit();
+                    var removedSystem = self.systems.orderedRemove(is);
+                    removedSystem.deinit();
                     break;
                 }
             }
         }
 
         // add new systems
-        while (self.addedSystems.popOrNull()) |*added| {
-            try self.systems.append(added.*);
+        while (self.addedSystems.popOrNull()) |_added| {
+            var added = _added;
+            try self.systems.append(added);
             try added.load();
         }
     }
@@ -454,13 +456,13 @@ pub const ECS = struct {
             .ptr = @ptrToInt(system),
             .name = @typeName(TSystem),
             .alignment = @alignOf(TSystem),
-            .initFn = &gen.initImpl,
-            .deinitFn = &gen.deinitImpl,
-            .loadFn = if (std.meta.trait.hasFn("load")(TSystem)) &gen.loadImpl else null,
-            .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) &gen.beforeImpl else null,
-            .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) &gen.updateImpl else null,
-            .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) &gen.afterImpl else null,
-            .uiFn = if (std.meta.trait.hasFn("ui")(TSystem)) &gen.uiImpl else null,
+            .initFn = gen.initImpl,
+            .deinitFn = gen.deinitImpl,
+            .loadFn = if (std.meta.trait.hasFn("load")(TSystem)) gen.loadImpl else null,
+            .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) gen.beforeImpl else null,
+            .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) gen.updateImpl else null,
+            .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) gen.afterImpl else null,
+            .uiFn = if (std.meta.trait.hasFn("ui")(TSystem)) gen.uiImpl else null,
         };
 
         return AllocSystemResult(TSystem){
@@ -574,31 +576,31 @@ const System = struct {
     uiFn: ?*const fn (usize, f32) anyerror!void,
 
     pub fn init(self: *@This(), ecs: *ECS) !void {
-        try @call(.{}, self.initFn.*, .{ ecs, self.ptr });
+        try @call(.{}, self.initFn, .{ ecs, self.ptr });
     }
 
     pub fn deinit(self: *@This()) void {
-        @call(.{}, self.deinitFn.*, .{self.ptr});
+        @call(.{}, self.deinitFn, .{self.ptr});
     }
 
     pub fn load(self: *@This()) !void {
-        if (self.loadFn) |loadFn| try @call(.{}, loadFn.*, .{self.ptr});
+        if (self.loadFn) |loadFn| try @call(.{}, loadFn, .{self.ptr});
     }
 
     pub fn before(self: *@This(), dt: f32) !void {
-        if (self.beforeFn) |beforeFn| try @call(.{}, beforeFn.*, .{ self.ptr, dt });
+        if (self.beforeFn) |beforeFn| try @call(.{}, beforeFn, .{ self.ptr, dt });
     }
 
     pub fn update(self: *@This(), dt: f32) !void {
-        if (self.updateFn) |updateFn| try @call(.{}, updateFn.*, .{ self.ptr, dt });
+        if (self.updateFn) |updateFn| try @call(.{}, updateFn, .{ self.ptr, dt });
     }
 
     pub fn after(self: *@This(), dt: f32) !void {
-        if (self.afterFn) |afterFn| try @call(.{}, afterFn.*, .{ self.ptr, dt });
+        if (self.afterFn) |afterFn| try @call(.{}, afterFn, .{ self.ptr, dt });
     }
 
     pub fn ui(self: *@This(), dt: f32) !void {
-        if (self.uiFn) |uiFn| try @call(.{}, uiFn.*, .{ self.ptr, dt });
+        if (self.uiFn) |uiFn| try @call(.{}, uiFn, .{ self.ptr, dt });
     }
 };
 

@@ -158,7 +158,6 @@ pub const GridPlacementSystem = struct {
 
         self.drawGrid();
 
-        _ = self;
         _ = dt;
     }
 
