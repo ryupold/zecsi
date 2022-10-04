@@ -56,6 +56,13 @@ pub fn drawTextAlloc(
 ) !void {
     const text = try std.fmt.allocPrintZ(allocator, fmt, args);
 
+    drawJustText(text, options);
+}
+
+pub inline fn drawJustText(
+    text: [:0]const u8,
+    options: DrawTextOptions,
+) void {
     const lines = @intCast(i32, @truncate(u32, std.mem.count(u8, text, "\n") + 1));
 
     const textWidth = raylib.MeasureText(text, options.fontSize);
@@ -67,4 +74,3 @@ pub fn drawTextAlloc(
         options.color,
     );
 }
-
