@@ -25,3 +25,5 @@ pub const baseSystems = struct {
     pub usingnamespace @import("systems/ui/ui_system.zig");
     pub usingnamespace @import("systems/scene_system.zig");
 };
+
+pub const ui = @import("systems/ui/ui.zig");
