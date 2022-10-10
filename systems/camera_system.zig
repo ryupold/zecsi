@@ -16,6 +16,9 @@ pub const CameraMouseDrag = struct {
 
 pub const CameraScrollZoom = struct {
     factor: f32 = 1,
+    shiftFactor: f32 = 0.1,
+    minScroll: f32 = 0.1,
+    maxScroll: f32 = 1000,
 };
 
 pub const CameraWASD = struct {
@@ -106,7 +109,8 @@ pub const CameraSystem = struct {
         };
         if (wheelMove != 0) {
             if (self.ecs.getPtr(self.camera, CameraScrollZoom)) |onScroll| {
-                cam.zoom = std.math.clamp((cam.zoom + wheelMove * onScroll.factor * cam.zoom), 0.1, 1000);
+                const shiftFactor = if(r.IsKeyDown(.KEY_LEFT_SHIFT) or r.IsKeyDown(.KEY_RIGHT_SHIFT)) onScroll.shiftFactor else 1;
+                cam.zoom = std.math.clamp((cam.zoom + wheelMove * onScroll.factor * shiftFactor * cam.zoom), onScroll.minScroll, onScroll.maxScroll);
             }
         }
     }
