@@ -6,6 +6,24 @@ pub const Timer = struct {
     repeat: bool,
     time: f32,
 
+    /// create a timer that loops and fires instantly
+    pub fn initLoop(time: f32) @This() {
+        return @This(){
+            .repeat = true,
+            .time = time,
+            .timePassed = time,
+        };
+    }
+
+    /// create a timer that just fires once after given time
+    pub fn initOneShot(time: f32) @This() {
+        return @This(){
+            .repeat = false,
+            .time = time,
+            .timePassed = 0,
+        };
+    }
+
     /// move time forward by `dt`
     /// returns true if `timePassed` reaches `time`
     /// if this is a `repeat`ing Timer, true is returned and `timePassed` starts from 0 (+overflow) again
