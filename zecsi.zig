@@ -16,6 +16,7 @@ pub const assets = @import("./assets.zig");
 pub const inputHandlers = @import("./input_handlers.zig");
 
 pub const raylib = @import("raylib/raylib.zig");
+pub const raygui = @import("raygui/raygui.zig");
 
 pub const baseSystems = struct {
     pub usingnamespace @import("systems/camera_system.zig");
