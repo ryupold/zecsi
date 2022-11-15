@@ -80,10 +80,12 @@ pub const AssetSystem = struct {
         return ptr;
     }
 
+    /// caller takes ownership of the JsonObject
     pub fn loadJsonObject(self: *Self, comptime T: type, path: [:0]const u8) !assets.JsonObject(T) {
         return try assets.JsonObject(T).init(try self.loadJson(path));
     }
 
+    /// caller takes ownership of the JsonObject
     pub fn loadJsonObjectOrDefault(self: *Self, path: [:0]const u8, default: anytype) assets.JsonObject(@TypeOf(default)) {
         const T = @TypeOf(default);
         const json = self.loadJson(path) catch {
@@ -93,8 +95,8 @@ pub const AssetSystem = struct {
     }
 
     pub fn unload(self: *Self, asset: *AssetLink) void {
-        asset.deinit();
         _ = self.assets.remove(asset.path);
+        asset.deinit();
     }
 
     pub fn update(self: *Self, dt: f32) !void {

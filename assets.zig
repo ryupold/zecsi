@@ -149,9 +149,18 @@ pub const Json = struct {
         self.* = try @This().load(path);
     }
 
-    pub fn as(self: @This(), comptime T: type) !T {
+    pub fn parse(self: @This(), comptime T: type, allocator: ?std.mem.Allocator) !T {
         var stream = std.json.TokenStream.init(self.data);
         return try std.json.parse(T, &stream, .{
+            .allocator = allocator,
+            .duplicate_field_behavior = .UseLast,
+            .ignore_unknown_fields = true,
+        });
+    }
+
+    pub fn free(obj: anytype, allocator: ?std.mem.Allocator) void {
+        std.json.parseFree(@TypeOf(obj), obj, .{
+            .allocator = allocator,
             .duplicate_field_behavior = .UseLast,
             .ignore_unknown_fields = true,
         });
@@ -166,21 +175,24 @@ pub fn JsonObject(comptime T: type) type {
         modTime: i128 = 0,
 
         pub fn init(json: *AssetLink) !@This() {
-            const o = try json.asset.Json.as(T);
             return @This(){
                 .json = json,
-                .object = o,
+                .object = try json.asset.Json.parse(T, null),
             };
         }
 
         pub fn initOrDefault(json: *AssetLink, default: T) @This() {
-            const o = json.asset.Json.as(T) catch |err| cDefault: {
+            const obj = json.asset.Json.parse(T, null) catch |err| {
                 log.err("cannot load {s}: {?}\nusing default value instead", .{ json.path, err });
-                break :cDefault default;
+                return @This(){
+                    .json = json,
+                    .object = default,
+                    .static = true,
+                };
             };
             return @This(){
                 .json = json,
-                .object = o,
+                .object = obj,
             };
         }
 
@@ -198,7 +210,8 @@ pub fn JsonObject(comptime T: type) type {
             }
 
             if (self.modTime != self.json.loadedModTime) {
-                self.object = self.json.asset.Json.as(T) catch |err| {
+                std.json.parseFree(T, self.object, .{});
+                self.object = self.json.asset.Json.parse(T, null) catch |err| {
                     log.err("cannot load {s}: {?}", .{ self.json.path, err });
                     return self.object;
                 };
