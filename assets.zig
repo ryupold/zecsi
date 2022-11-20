@@ -84,12 +84,14 @@ pub const TextureAtlas = struct {
 pub const AnimatedTextureAtlas = struct {
     time: f32,
     index: u32 = 0,
+    count: u32,
     loop: bool,
     atlas: *AssetLink,
     timePassed: f32 = 0,
 
     pub fn init(
         asset: *AssetLink,
+        count: u32,
         time: f32,
         loop: bool,
     ) @This() {
@@ -97,6 +99,7 @@ pub const AnimatedTextureAtlas = struct {
             .atlas = asset,
             .time = time,
             .loop = loop,
+            .count = count,
         };
     }
 
@@ -117,8 +120,20 @@ pub const AnimatedTextureAtlas = struct {
         const percent = self.timePassed / self.time;
         self.index = @floatToInt(
             u32,
-            percent * @intToFloat(f32, self.atlas.asset.TextureAtlas.count.x),
+            percent * @intToFloat(f32, self.count - 1),
         );
+    }
+
+    pub fn draw(
+        self: @This(),
+        dest: r.Rectangle,
+        origin: r.Vector2,
+        rotation: f32,
+        tint: r.Color,
+    ) void {
+        const cellX = self.index % self.atlas.asset.TextureAtlas.count.x;
+        const cellY = self.index / self.atlas.asset.TextureAtlas.count.x;
+        self.atlas.asset.TextureAtlas.draw(cellX, cellY, dest, origin, rotation, tint);
     }
 };
 

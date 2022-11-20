@@ -8,7 +8,6 @@ const utils = @import("../utils.zig");
 const AssetLink = assets.AssetLink;
 const Texture = r.Texture;
 const TextureAtlas = assets.TextureAtlas;
-const AnimatedTextureAtlas = assets.AnimatedTextureAtlas;
 
 pub const AssetSystem = struct {
     pub const Self = @This();
