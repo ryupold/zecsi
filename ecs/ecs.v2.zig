@@ -576,31 +576,31 @@ const System = struct {
     uiFn: ?*const fn (usize, f32) anyerror!void,
 
     pub fn init(self: *@This(), ecs: *ECS) !void {
-        try @call(.{}, self.initFn, .{ ecs, self.ptr });
+        try @call(.auto, self.initFn, .{ ecs, self.ptr });
     }
 
     pub fn deinit(self: *@This()) void {
-        @call(.{}, self.deinitFn, .{self.ptr});
+        @call(.auto, self.deinitFn, .{self.ptr});
     }
 
     pub fn load(self: *@This()) !void {
-        if (self.loadFn) |loadFn| try @call(.{}, loadFn, .{self.ptr});
+        if (self.loadFn) |loadFn| try @call(.auto, loadFn, .{self.ptr});
     }
 
     pub fn before(self: *@This(), dt: f32) !void {
-        if (self.beforeFn) |beforeFn| try @call(.{}, beforeFn, .{ self.ptr, dt });
+        if (self.beforeFn) |beforeFn| try @call(.auto, beforeFn, .{ self.ptr, dt });
     }
 
     pub fn update(self: *@This(), dt: f32) !void {
-        if (self.updateFn) |updateFn| try @call(.{}, updateFn, .{ self.ptr, dt });
+        if (self.updateFn) |updateFn| try @call(.auto, updateFn, .{ self.ptr, dt });
     }
 
     pub fn after(self: *@This(), dt: f32) !void {
-        if (self.afterFn) |afterFn| try @call(.{}, afterFn, .{ self.ptr, dt });
+        if (self.afterFn) |afterFn| try @call(.auto, afterFn, .{ self.ptr, dt });
     }
 
     pub fn ui(self: *@This(), dt: f32) !void {
-        if (self.uiFn) |uiFn| try @call(.{}, uiFn, .{ self.ptr, dt });
+        if (self.uiFn) |uiFn| try @call(.auto, uiFn, .{ self.ptr, dt });
     }
 };
 

@@ -863,7 +863,7 @@ pub fn archetypeHash(arch: anytype) ArchetypeHash {
     }
 
     inline for (tyInfo.Struct.fields) |field| {
-        if (@TypeOf(field.field_type) != type) {
+        if (@TypeOf(field.type) != type) {
             compError("expected tuple of types but got {?}", .{arch});
         }
     }
@@ -977,7 +977,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
     };
 
     inline for (tyInfo.Struct.fields) |field, i| {
-        comptime if (!meta.trait.isTuple(field.field_type)) {
+        comptime if (!meta.trait.isTuple(field.type)) {
             compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
         };
         comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {
@@ -988,7 +988,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
     var structFields: [arch.len + 1]std.builtin.Type.StructField = undefined;
     structFields[0] = .{
         .name = "entity",
-        .field_type = EntityID,
+        .type = EntityID,
         .default_value = null,
         .is_comptime = false,
         .alignment = @alignOf(EntityID),
@@ -997,7 +997,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
         @setEvalBranchQuota(10_000);
         structFields[i + 1] = .{
             .name = lT[0],
-            .field_type = *lT[1],
+            .type = *lT[1],
             .default_value = null,
             .is_comptime = false,
             .alignment = if (@sizeOf(lT[1]) > 0) @alignOf(lT[1]) else 0,
@@ -1036,7 +1036,7 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
     };
 
     inline for (tyInfo.Struct.fields) |field, i| {
-        comptime if (!meta.trait.isTuple(field.field_type)) {
+        comptime if (!meta.trait.isTuple(field.type)) {
             compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
         };
         comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {
@@ -1047,7 +1047,7 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
     var structFields: [arch.len + 1]std.builtin.Type.StructField = undefined;
     structFields[0] = .{
         .name = "entities",
-        .field_type = []EntityID,
+        .type = []EntityID,
         .default_value = null,
         .is_comptime = false,
         .alignment = @alignOf([]EntityID),
@@ -1056,7 +1056,7 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
     inline for (arch) |lT, i| {
         structFields[i + 1] = .{
             .name = lT[0],
-            .field_type = []lT[1],
+            .type = []lT[1],
             .default_value = null,
             .is_comptime = false,
             .alignment = if (@sizeOf(lT[1]) > 0) @alignOf(lT[1]) else 0,
