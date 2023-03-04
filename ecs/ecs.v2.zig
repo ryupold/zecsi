@@ -99,7 +99,7 @@ pub const ECS = struct {
 
         var entity = try this.create();
         //TODO: optimize: put data directly into correct archetype
-        inline for (info.Struct.fields) |_, i| {
+        inline for (info.Struct.fields, 0..) |_, i| {
             try this.put(entity, components[i]);
         }
         return entity;
@@ -149,7 +149,7 @@ pub const ECS = struct {
     fn syncSystems(self: *@This()) !void {
         // remove marked systems
         while (self.removedSystems.popOrNull()) |removed| {
-            for (self.systems.items) |sys, is| {
+            for (self.systems.items, 0..) |sys, is| {
                 if (std.mem.eql(u8, removed.key, sys.name)) {
                     var removedSystem = self.systems.orderedRemove(is);
                     removedSystem.deinit();

@@ -218,7 +218,7 @@ pub const ECS = struct {
 
         //remove component from the entity's component list
         var index: usize = indeX: {
-            for (e.components.items) |c, i| {
+            for (e.components.items, 0..) |c, i| {
                 if (component.eql(c)) {
                     break :indeX i;
                 }

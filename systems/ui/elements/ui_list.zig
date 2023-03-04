@@ -55,7 +55,7 @@ pub fn uiList(
 
     r.DrawRectangleRec(rect, options.borderColor);
 
-    for (data) |element, i| {
+    for (data, 0..) |element, i| {
         const cellRect = r.Rectangle{
             .x = rect.x,
             .y = rect.y + (@intToFloat(f32, i) * spacePerCell.y),

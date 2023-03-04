@@ -250,7 +250,7 @@ pub const ArchetypeStorage = struct {
         }
         // entity is newly added to this storage
         else {
-            for (this.addedEntityIDs.items) |aE, index| {
+            for (this.addedEntityIDs.items, 0..) |aE, index| {
                 if (aE == entity) {
                     if (this.addedData.getPtr(typeId(T))) |addedColumn| {
                         try addedColumn.set(componentData, index);
@@ -280,7 +280,7 @@ pub const ArchetypeStorage = struct {
             }
             // entity is newly added to this storage
             else {
-                for (this.addedEntityIDs.items) |aE, index| {
+                for (this.addedEntityIDs.items, 0..) |aE, index| {
                     if (aE == entity) {
                         var addedColumnPtr = this.addedData.getPtr(typeId(T)).?;
                         return addedColumnPtr.getPtr(T, index);
@@ -333,7 +333,7 @@ pub const ArchetypeStorage = struct {
                 data = oldStorage.data;
                 break :getIndex i;
             } else {
-                for (oldStorage.addedEntityIDs.items) |e, i| {
+                for (oldStorage.addedEntityIDs.items, 0..) |e, i| {
                     if (e == entity) {
                         data = oldStorage.addedData;
                         break :getIndex i;
@@ -409,7 +409,7 @@ pub const ArchetypeStorage = struct {
         }
         // otherwise it should be in addedEntityIDs
         else {
-            for (this.addedEntityIDs.items) |e, i| {
+            for (this.addedEntityIDs.items, 0..) |e, i| {
                 if (e == entity) {
                     for (this.addedData.values()) |*column| {
                         column.remove(i);
@@ -739,7 +739,7 @@ test "ArchetypeStorage query (ArchetypeSlices)" {
     try voidArch.sync();
 
     // move to {Position,Name,Target} archetype
-    for (voidArch.entities()) |entity, i| {
+    for (voidArch.entities(), 0..) |entity, i| {
         _ = try testArch.copyFromOldArchetype(entity, voidArch);
 
         //put data (works before and after sync)
@@ -796,7 +796,7 @@ test "ArchetypeStorage query (ArchetypeEntry)" {
     try voidArch.sync();
 
     // move to {Position,Name,Target} archetype
-    for (voidArch.entities()) |entity, i| {
+    for (voidArch.entities(), 0..) |entity, i| {
         _ = try testArch.copyFromOldArchetype(entity, voidArch);
 
         //put data (works before and after sync)
@@ -976,7 +976,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
         compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
     };
 
-    inline for (tyInfo.Struct.fields) |field, i| {
+    inline for (tyInfo.Struct.fields, 0..) |field, i| {
         comptime if (!meta.trait.isTuple(field.type)) {
             compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
         };
@@ -993,7 +993,7 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
         .is_comptime = false,
         .alignment = @alignOf(EntityID),
     };
-    inline for (arch) |lT, i| {
+    inline for (arch, 0..) |lT, i| {
         @setEvalBranchQuota(10_000);
         structFields[i + 1] = .{
             .name = lT[0],
@@ -1035,7 +1035,7 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
         compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
     };
 
-    inline for (tyInfo.Struct.fields) |field, i| {
+    inline for (tyInfo.Struct.fields, 0..) |field, i| {
         comptime if (!meta.trait.isTuple(field.type)) {
             compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
         };
@@ -1053,7 +1053,7 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
         .alignment = @alignOf([]EntityID),
     };
 
-    inline for (arch) |lT, i| {
+    inline for (arch, 0..) |lT, i| {
         structFields[i + 1] = .{
             .name = lT[0],
             .type = []lT[1],
