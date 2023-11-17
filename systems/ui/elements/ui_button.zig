@@ -1,5 +1,5 @@
 const std = @import("std");
-const r = @import("../../../raylib/raylib.zig");
+const r = @import("raylib");
 const utils = @import("../draw_text.zig");
 
 pub const UiButtonOptions = struct {
@@ -50,13 +50,13 @@ pub fn uiButton(text: []const u8, rect: r.Rectangle, options: UiButtonOptions) b
     var buf: [100 * 1024]u8 = undefined;
     utils.drawTextBuf(&buf, "{s}", .{text}, .{
         .position = rect.center(),
-        .fontSize = @floatToInt(i32, options.fontSize),
+        .fontSize = @as(i32, @intFromFloat(options.fontSize)),
         .color = txtColor,
         .origin = utils.TextOrigin.center,
     }) catch |err| {
         utils.drawTextBuf(&buf, "{?}", .{err}, .{
             .position = rect.center(),
-            .fontSize = @floatToInt(i32, options.fontSize),
+            .fontSize = @as(i32, @intFromFloat(options.fontSize)),
             .color = txtColor,
             .origin = utils.TextOrigin.center,
         }) catch unreachable;
@@ -105,13 +105,13 @@ pub fn uiButtonFmt(
     var buf: [10 * 1024]u8 = undefined;
     utils.drawTextBuf(&buf, fmt, args, .{
         .position = rect.center(),
-        .fontSize = @floatToInt(i32, options.fontSize),
+        .fontSize = @as(i32, @intFromFloat(options.fontSize)),
         .color = txtColor,
         .origin = utils.TextOrigin.center,
     }) catch |err| {
         utils.drawTextBuf(&buf, "{?}", .{err}, .{
             .position = rect.center(),
-            .fontSize = @floatToInt(i32, options.fontSize),
+            .fontSize = @as(i32, @intFromFloat(options.fontSize)),
             .color = txtColor,
             .origin = utils.TextOrigin.center,
         }) catch unreachable;

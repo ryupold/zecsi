@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const r = @import("raylib/raylib.zig");
+const r = @import("raylib");
 const log = @import("log.zig");
 
 pub const TextureAtlas = struct {
@@ -31,8 +31,8 @@ pub const TextureAtlas = struct {
             .tex = tex,
             .count = .{ .x = horizontalCells, .y = verticalCells },
             .cell = .{
-                .width = @intToFloat(f32, @divFloor(@intCast(u32, tex.width), horizontalCells)),
-                .height = @intToFloat(f32, @divFloor(@intCast(u32, tex.height), verticalCells)),
+                .width = @as(f32, @floatFromInt(@divFloor(@as(u32, @intCast(tex.width)), horizontalCells))),
+                .height = @as(f32, @floatFromInt(@divFloor(@as(u32, @intCast(tex.height)), verticalCells))),
             },
         };
     }
@@ -64,8 +64,8 @@ pub const TextureAtlas = struct {
         rotation: f32,
         tint: r.Color,
     ) void {
-        const fX = @intToFloat(f32, cellX);
-        const fY = @intToFloat(f32, cellY);
+        const fX = @as(f32, @floatFromInt(cellX));
+        const fY = @as(f32, @floatFromInt(cellY));
 
         const sourceRec: r.Rectangle = .{
             .x = fX * self.cell.width,
@@ -118,9 +118,9 @@ pub const AnimatedTextureAtlas = struct {
         }
 
         const percent = self.timePassed / self.time;
-        self.index = @floatToInt(
+        self.index = @as(
             u32,
-            percent * @intToFloat(f32, self.count - 1),
+            @intFromFloat(percent * @as(f32, @floatFromInt(self.count - 1))),
         );
     }
 
@@ -164,16 +164,14 @@ pub const Json = struct {
         self.* = try @This().load(path);
     }
 
-    pub fn parse(self: @This(), comptime T: type, allocator: ?std.mem.Allocator) !T {
-        var stream = std.json.TokenStream.init(self.data);
-        return try std.json.parse(T, &stream, .{
-            .allocator = allocator,
-            .duplicate_field_behavior = .UseLast,
+    pub fn parse(self: @This(), comptime T: type, allocator: std.mem.Allocator) !std.json.Parsed(T) {
+        return try std.json.parseFromSlice(T, allocator, self.data, .{
             .ignore_unknown_fields = true,
+            .duplicate_field_behavior = .use_last,
         });
     }
 
-    pub fn free(obj: anytype, allocator: ?std.mem.Allocator) void {
+    pub fn free(comptime T: type, obj: std.json.Parsed(T), allocator: ?std.mem.Allocator) void {
         std.json.parseFree(@TypeOf(obj), obj, .{
             .allocator = allocator,
             .duplicate_field_behavior = .UseLast,

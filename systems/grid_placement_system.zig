@@ -1,6 +1,6 @@
 const std = @import("std");
 const ECS = @import("../ecs/ecs.v2.zig").ECS;
-const r = @import("../raylib/raylib.zig");
+const r = @import("raylib");
 const log = @import("../log.zig");
 const camera = @import("camera_system.zig");
 const CameraSystem = camera.CameraSystem;
@@ -191,7 +191,7 @@ pub const GridPlacementSystem = struct {
                 from,
                 to,
                 scale,
-                r.GREEN.set(.{ .a = @floatToInt(u8, std.math.clamp(100 / scale, 0, 255)) }),
+                r.GREEN.set(.{ .a = @as(u8, @intFromFloat(std.math.clamp(100 / scale, 0, 255))) }),
             );
         }
 
@@ -206,7 +206,7 @@ pub const GridPlacementSystem = struct {
                 from,
                 to,
                 scale,
-                r.GREEN.set(.{ .a = @floatToInt(u8, std.math.clamp(100 / scale, 0, 255)) }),
+                r.GREEN.set(.{ .a = @as(u8, @intFromFloat(std.math.clamp(100 / scale, 0, 255))) }),
             );
         }
     }
@@ -218,19 +218,19 @@ pub const GridPlacementSystem = struct {
 
     pub fn toGridLen(self: *@This(), l: f32) i32 {
         const rounder: f32 = if (l < 0) -0.5 else 0.5;
-        return @floatToInt(i32, l / self.cellSize() + rounder);
+        return @as(i32, @intFromFloat(l / self.cellSize() + rounder));
     }
 
     pub fn toWorldLen(self: *@This(), l: i32) f32 {
-        return @intToFloat(f32, l) * self.cellSize();
+        return @as(f32, @floatFromInt(l)) * self.cellSize();
     }
 
     pub fn toGridPosition(self: *@This(), pos: Vector2) GridPosition {
         const xRounder: f32 = if (pos.x < 0) -0.5 else 0.5;
         const yRounder: f32 = if (pos.y < 0) -0.5 else 0.5;
         return .{
-            .x = @floatToInt(i32, pos.x / self.cellSize() + xRounder),
-            .y = @floatToInt(i32, pos.y / self.cellSize() + yRounder),
+            .x = @as(i32, @intFromFloat(pos.x / self.cellSize() + xRounder)),
+            .y = @as(i32, @intFromFloat(pos.y / self.cellSize() + yRounder)),
         };
     }
 
@@ -239,8 +239,8 @@ pub const GridPlacementSystem = struct {
     pub fn toWorldPosition(self: *@This(), pos: GridPosition) Vector2 {
         const cs = self.cellSize();
         return .{
-            .x = @intToFloat(f32, pos.x) * cs,
-            .y = @intToFloat(f32, pos.y) * cs,
+            .x = @as(f32, @floatFromInt(pos.x)) * cs,
+            .y = @as(f32, @floatFromInt(pos.y)) * cs,
         };
     }
 
@@ -249,8 +249,8 @@ pub const GridPlacementSystem = struct {
         const cs = self.cellSize();
         const o = origin.scale(cs);
         return .{
-            .x = (@intToFloat(f32, pos.x) * cs - cs / 2) + o.x,
-            .y = (@intToFloat(f32, pos.y) * cs - cs / 2) + o.y,
+            .x = (@as(f32, @floatFromInt(pos.x)) * cs - cs / 2) + o.x,
+            .y = (@as(f32, @floatFromInt(pos.y)) * cs - cs / 2) + o.y,
         };
     }
 };

@@ -31,7 +31,7 @@ const ArchetypeColumn = struct {
         return @This(){
             .typ = typeId(TComponent),
             .allocator = allocator,
-            .column = @ptrCast(*anyopaque, columnPtr),
+            .column = @as(*anyopaque, @ptrCast(columnPtr)),
             ._append = &(struct {
                 fn append(column: *ArchetypeColumn) std.mem.Allocator.Error!usize {
                     var list = column.cast(TComponent) catch unreachable;
@@ -131,7 +131,7 @@ const ArchetypeColumn = struct {
     /// cast column pointer to arraylist pointer of `TComponent` (if possible)
     fn cast(this: *@This(), comptime TComponent: type) error{WrongComponentType}!*std.ArrayList(TComponent) {
         if (typeId(TComponent) != this.typ) return error.WrongComponentType;
-        return @ptrCast(*std.ArrayList(TComponent), @alignCast(@alignOf(*std.ArrayList(TComponent)), this.column));
+        return @as(*std.ArrayList(TComponent), @ptrCast(@alignCast(this.column)));
     }
 
     /// create a empty column with same type information
@@ -743,11 +743,11 @@ test "ArchetypeStorage query (ArchetypeSlices)" {
         _ = try testArch.copyFromOldArchetype(entity, voidArch);
 
         //put data (works before and after sync)
-        const p = Position{ .x = @intToFloat(f32, i), .y = @intToFloat(f32, i) * 2 };
+        const p = Position{ .x = @as(f32, @floatFromInt(i)), .y = @as(f32, @floatFromInt(i)) * 2 };
         try testArch.put(entity, p);
         const n = Name{ .name = "lorizzle" };
         try testArch.put(entity, n);
-        const target = Target{ .x = @intToFloat(f32, i) * 3, .y = @intToFloat(f32, i) * 4 };
+        const target = Target{ .x = @as(f32, @floatFromInt(i)) * 3, .y = @as(f32, @floatFromInt(i)) * 4 };
         try testArch.put(entity, target);
     }
     try testArch.sync();
@@ -800,11 +800,11 @@ test "ArchetypeStorage query (ArchetypeEntry)" {
         _ = try testArch.copyFromOldArchetype(entity, voidArch);
 
         //put data (works before and after sync)
-        const p = Position{ .x = @intToFloat(f32, i), .y = @intToFloat(f32, i) * 2 };
+        const p = Position{ .x = @as(f32, @floatFromInt(i)), .y = @as(f32, @floatFromInt(i)) * 2 };
         try testArch.put(entity, p);
         const n = Name{ .name = "lorizzle" };
         try testArch.put(entity, n);
-        const target = Target{ .x = @intToFloat(f32, i) * 3, .y = @intToFloat(f32, i) * 4 };
+        const target = Target{ .x = @as(f32, @floatFromInt(i)) * 3, .y = @as(f32, @floatFromInt(i)) * 4 };
         try testArch.put(entity, target);
     }
     try testArch.sync();
@@ -844,7 +844,7 @@ pub fn typeId(comptime T: type) ComponentType {
     const H = struct {
         var byte: u8 = 0;
     };
-    return @ptrToInt(&H.byte);
+    return @intFromPtr(&H.byte);
 }
 
 const voidArchetypeHash: ArchetypeHash = std.math.maxInt(u64);

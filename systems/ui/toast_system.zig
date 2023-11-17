@@ -107,14 +107,14 @@ pub const Toast = struct {
     pub fn draw(this: @This()) void {
         //TODO: fix cause of Nan
         if (std.math.isNan(this.position.x) or std.math.isNan(this.position.y)) return;
-        const lines = @intCast(i32, @truncate(u32, std.mem.count(u8, this.text, "\n") + 1));
+        const lines = @as(i32, @intCast(@as(u32, @truncate(std.mem.count(u8, this.text, "\n") + 1))));
 
         const textWidth = raylib.MeasureText(this.text, this.options.fontSize);
         const textHeight = lines * this.options.fontSize;
         std.debug.assert(!std.math.isNan(this.position.x) and !std.math.isNan(this.position.y));
         const topLeft = raylib.Vector2i{
-            .x = @floatToInt(i32, this.position.x - (@intToFloat(f32, textWidth) * this.options.origin.x)),
-            .y = @floatToInt(i32, this.position.y - (@intToFloat(f32, this.options.fontSize * lines) * this.options.origin.y)),
+            .x = @as(i32, @intFromFloat(this.position.x - (@as(f32, @floatFromInt(textWidth)) * this.options.origin.x))),
+            .y = @as(i32, @intFromFloat(this.position.y - (@as(f32, @floatFromInt(this.options.fontSize * lines)) * this.options.origin.y))),
         };
         const fs = this.options.fontSize;
         raylib.DrawRectangle(
@@ -129,8 +129,8 @@ pub const Toast = struct {
         );
         if (this.options.pointer) |pointer| {
             raylib.DrawCircle(
-                @floatToInt(i32, this.position.x + pointer.x),
-                @floatToInt(i32, this.position.y + pointer.y),
+                @as(i32, @intFromFloat(this.position.x + pointer.x)),
+                @as(i32, @intFromFloat(this.position.y + pointer.y)),
                 2,
                 raylib.RED,
             );

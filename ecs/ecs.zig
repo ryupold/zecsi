@@ -140,11 +140,11 @@ pub const ECS = struct {
 
         var arr: *std.ArrayList(T) = undefined;
         if (self.componentData.getPtr(c.t)) |address| {
-            arr = @intToPtr(*std.ArrayList(T), address.*);
+            arr = @as(*std.ArrayList(T), @ptrFromInt(address.*));
         } else {
             arr = try self.componentAllocator.create(std.ArrayList(T));
             arr.* = std.ArrayList(T).init(self.componentAllocator);
-            try self.componentData.put(c.t, @ptrToInt(arr));
+            try self.componentData.put(c.t, @intFromPtr(arr));
         }
 
         var freeId: ?*std.ArrayList(usize) = self.freeComponentIDs.getPtr(c.t);
@@ -274,7 +274,7 @@ pub const ECS = struct {
 
         if (e.getOne(TComponent)) |c| {
             const address = self.componentData.get(c.t).?;
-            var arr: *std.ArrayList(TComponent) = @intToPtr(*std.ArrayList(TComponent), address);
+            var arr: *std.ArrayList(TComponent) = @as(*std.ArrayList(TComponent), @ptrFromInt(address));
             return &arr.items[c.id];
         }
         return null;
@@ -283,10 +283,10 @@ pub const ECS = struct {
     pub fn getOnePtrByName(self: *Self, entity: anytype, comptime TComponent: type, name: []const u8) ?*TComponent {
         const entityID = self.getID(entity);
         var e = if (self.getEntity(entityID)) |eid| eid else return null;
-        
+
         if (e.getOneByName(name)) |c| {
             const address = self.componentData.get(c.t).?;
-            var arr: *std.ArrayList(TComponent) = @intToPtr(*std.ArrayList(TComponent), address);
+            var arr: *std.ArrayList(TComponent) = @as(*std.ArrayList(TComponent), @ptrFromInt(address));
             return &arr.items[c.id];
         }
         return null;
@@ -296,7 +296,7 @@ pub const ECS = struct {
     /// this reference can get invalid when adding/removing components so better never store it somewhere
     pub fn getPtr(self: *Self, comptime TComponent: type, component: Component) ?*TComponent {
         if (self.componentData.get(component.t)) |address| {
-            var arr: *std.ArrayList(TComponent) = @intToPtr(*std.ArrayList(TComponent), address);
+            var arr: *std.ArrayList(TComponent) = @as(*std.ArrayList(TComponent), @ptrFromInt(address));
             return &arr.items[component.id];
         }
         return null;
@@ -327,13 +327,12 @@ pub const ECS = struct {
                     inline for (types) |t| {
                         const tInfo = @typeInfo(@TypeOf(t));
                         const isString = tInfo == .Pointer and (tInfo.Pointer.child == u8 or (@typeInfo(tInfo.Pointer.child) == .Array and @typeInfo(tInfo.Pointer.child).Array.child == u8));
-                        if(isString) {
+                        if (isString) {
                             if (!e.hasByName(t)) {
                                 matches = false;
                                 break;
                             }
-                        }
-                        else if (!e.has(t)) {
+                        } else if (!e.has(t)) {
                             matches = false;
                             break;
                         }
@@ -366,7 +365,7 @@ pub const ECS = struct {
     pub fn getSystem(self: *Self, comptime TSystem: type) ?*TSystem {
         for (self.systems.items) |sys| {
             if (std.mem.eql(u8, @typeName(TSystem), sys.name))
-                return @intToPtr(*TSystem, sys.ptr);
+                return @as(*TSystem, @ptrFromInt(sys.ptr));
         }
         return null;
     }
@@ -422,31 +421,31 @@ pub const ECS = struct {
             const hasUI = std.meta.trait.hasFn("ui")(TSystem);
 
             pub fn deinitImpl(ptr: usize) void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 this.deinit();
                 this.ecs.allocator.destroy(this);
             }
 
             pub fn beforeImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasBefore) try this.before(dt);
             }
             pub fn updateImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasUpdate) try this.update(dt);
             }
             pub fn afterImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasAfter) try this.after(dt);
             }
             pub fn uiImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasUI) try this.ui(dt);
             }
         };
 
         const sys = System{
-            .ptr = @ptrToInt(system),
+            .ptr = @intFromPtr(system),
             .name = @typeName(TSystem),
             .alignment = @alignOf(TSystem),
             .deinitFn = gen.deinitImpl,
@@ -571,7 +570,7 @@ pub const Entity = struct {
     pub fn getData(self: *@This(), ecs: *ECS, comptime T: type) ?*T {
         return ecs.getOnePtr(self, T);
     }
-   
+
     pub fn getDataByName(self: *@This(), ecs: *ECS, comptime T: type, name: []const u8) ?*T {
         return ecs.getOnePtrByName(self, T, name);
     }

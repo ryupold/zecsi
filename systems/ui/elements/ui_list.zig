@@ -1,5 +1,5 @@
 const std = @import("std");
-const r = @import("../../../raylib/raylib.zig");
+const r = @import("raylib");
 const utils = @import("../draw_text.zig");
 
 pub fn defaultTrimOverflow(text: []u8, options: DrawTextInRectOptions) void {
@@ -51,14 +51,14 @@ pub fn uiList(
         }
         textList.deinit();
     }
-    const spacePerCell = r.Vector2{ .x = rect.width, .y = rect.height / @intToFloat(f32, data.len) };
+    const spacePerCell = r.Vector2{ .x = rect.width, .y = rect.height / @as(f32, @floatFromInt(data.len)) };
 
     r.DrawRectangleRec(rect, options.borderColor);
 
     for (data, 0..) |element, i| {
         const cellRect = r.Rectangle{
             .x = rect.x,
-            .y = rect.y + (@intToFloat(f32, i) * spacePerCell.y),
+            .y = rect.y + (@as(f32, @floatFromInt(i)) * spacePerCell.y),
             .width = rect.width,
             .height = spacePerCell.y,
         };

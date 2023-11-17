@@ -1,5 +1,5 @@
 const std = @import("std");
-const raylib = @import("../../../raylib/raylib.zig");
+const raylib = @import("raylib");
 const utils = @import("../draw_text.zig");
 
 pub fn ArrayTextInput(comptime maxLength: usize) type {
@@ -34,31 +34,31 @@ pub fn ArrayTextInput(comptime maxLength: usize) type {
             }
             if (this.isFocused) {
                 // Get char pressed (utf8 character) on the queue
-                var key = @intCast(u21, raylib.GetCharPressed());
+                var key = @as(u21, @intCast(raylib.GetCharPressed()));
 
                 // Check if more characters have been pressed on the same frame
                 while (key > 0) {
-                    var byteCount: usize = @intCast(usize, std.unicode.utf8CodepointSequenceLength(key) catch 0);
+                    var byteCount: usize = @as(usize, @intCast(std.unicode.utf8CodepointSequenceLength(key) catch 0));
                     if (byteCount == 0) continue;
                     if ((key >= 32) and (this.last < this.data.len - byteCount - 1)) {
                         if (std.unicode.Utf8View.init(this.text())) |view| {
                             var it = view.iterator();
-                            const cursorIndex : usize = it.peek(this.cursorPos).len;
-                            std.mem.copy(u8, this.data[cursorIndex..this.last], this.data[cursorIndex+byteCount..this.last+byteCount]);
+                            const cursorIndex: usize = it.peek(this.cursorPos).len;
+                            std.mem.copy(u8, this.data[cursorIndex..this.last], this.data[cursorIndex + byteCount .. this.last + byteCount]);
                         } else |err| {
                             std.debug.print("ui_text_input.zig: {?}\n", .{err});
                             continue;
                         }
 
                         while (byteCount > 0) : (byteCount -= 1) {
-                            this.data[this.last] = @truncate(u8, key >> @intCast(u5, (byteCount - 1) * 8));
+                            this.data[this.last] = @as(u8, @truncate(key >> @as(u5, @intCast((byteCount - 1) * 8))));
                             this.last += 1;
                         }
                         this.letters += 1;
                         this.cursorPos += 1;
                     }
 
-                    key = @intCast(u21, raylib.GetCharPressed()); // Check next character in the queue
+                    key = @as(u21, @intCast(raylib.GetCharPressed())); // Check next character in the queue
                 }
 
                 if (raylib.IsKeyPressed(.KEY_BACKSPACE) and this.cursorPos > 0 and this.letters > 0) {
@@ -97,13 +97,13 @@ pub fn ArrayTextInput(comptime maxLength: usize) type {
             // DRAW
             raylib.DrawRectangleRec(this.box, this.backgroundColor);
             if (this.isFocused) {
-                raylib.DrawRectangleLines(@floatToInt(i32, this.box.x), @floatToInt(i32, this.box.y), @floatToInt(i32, this.box.width), @floatToInt(i32, this.box.height), this.focusedBorderColor);
+                raylib.DrawRectangleLines(@as(i32, @intFromFloat(this.box.x)), @as(i32, @intFromFloat(this.box.y)), @as(i32, @intFromFloat(this.box.width)), @as(i32, @intFromFloat(this.box.height)), this.focusedBorderColor);
             } else {
-                raylib.DrawRectangleLines(@floatToInt(i32, this.box.x), @floatToInt(i32, this.box.y), @floatToInt(i32, this.box.width), @floatToInt(i32, this.box.height), this.unfocusedBorderColor);
+                raylib.DrawRectangleLines(@as(i32, @intFromFloat(this.box.x)), @as(i32, @intFromFloat(this.box.y)), @as(i32, @intFromFloat(this.box.width)), @as(i32, @intFromFloat(this.box.height)), this.unfocusedBorderColor);
             }
 
-            const fontSize = @floatToInt(i32, this.box.height) - 2;
-            raylib.DrawText(@ptrCast([*:0]u8, &this.data), @floatToInt(i32, this.box.x) + 5, @floatToInt(i32, this.box.y), fontSize, this.fontColor);
+            const fontSize = @as(i32, @intFromFloat(this.box.height)) - 2;
+            raylib.DrawText(@as([*:0]u8, @ptrCast(&this.data)), @as(i32, @intFromFloat(this.box.x)) + 5, @as(i32, @intFromFloat(this.box.y)), fontSize, this.fontColor);
 
             // draw cursor
             if (this.isFocused) {
@@ -113,7 +113,7 @@ pub fn ArrayTextInput(comptime maxLength: usize) type {
                         const peek = it.peek(this.cursorPos);
                         const before = this.data[peek.len];
                         this.data[peek.len] = 0;
-                        raylib.DrawText("|", @floatToInt(i32, this.box.x) + 4 + raylib.MeasureText(@ptrCast([*:0]u8, &this.data), fontSize), @floatToInt(i32, this.box.y), fontSize, this.fontColor);
+                        raylib.DrawText("|", @as(i32, @intFromFloat(this.box.x)) + 4 + raylib.MeasureText(@as([*:0]u8, @ptrCast(&this.data)), fontSize), @as(i32, @intFromFloat(this.box.y)), fontSize, this.fontColor);
                         this.data[peek.len] = before;
                     } else |err| {
                         std.debug.print("ui_text_input.zig: {?}\n", .{err});

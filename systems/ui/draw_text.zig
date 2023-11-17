@@ -63,13 +63,13 @@ pub inline fn drawJustText(
     text: [:0]const u8,
     options: DrawTextOptions,
 ) void {
-    const lines = @intCast(i32, @truncate(u32, std.mem.count(u8, text, "\n") + 1));
+    const lines = @as(i32, @intCast(@as(u32, @truncate(std.mem.count(u8, text, "\n") + 1))));
 
     const textWidth = raylib.MeasureText(text, options.fontSize);
     raylib.DrawText(
         text,
-        @floatToInt(i32, options.position.x - (@intToFloat(f32, textWidth) * options.origin.x)),
-        @floatToInt(i32, options.position.y - (@intToFloat(f32, options.fontSize * lines) * options.origin.y)),
+        @as(i32, @intFromFloat(options.position.x - (@as(f32, @floatFromInt(textWidth)) * options.origin.x))),
+        @as(i32, @intFromFloat(options.position.y - (@as(f32, @floatFromInt(options.fontSize * lines)) * options.origin.y))),
         options.fontSize,
         options.color,
     );

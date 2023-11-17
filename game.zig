@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = @import("log.zig");
-const raylib = @import("raylib/raylib.zig");
+const raylib = @import("raylib");
 const _ecs = @import("ecs/ecs.v2.zig");
 pub const ECS = _ecs.ECS;
 
@@ -39,8 +39,8 @@ pub fn init(alloc: Allocator, c: GameConfig) !void {
     ecs.* = try _ecs.ECS.init(allocator);
     ecsInitialized = true;
     if (ecsInitialized) {
-        ecs.window.size.x = @intToFloat(f32, screenWidth);
-        ecs.window.size.y = @intToFloat(f32, screenWidth);
+        ecs.window.size.x = @as(f32, @floatFromInt(screenWidth));
+        ecs.window.size.y = @as(f32, @floatFromInt(screenWidth));
     }
 
     if (config.initialWindowSize) |size| {
@@ -55,8 +55,8 @@ pub fn setWindowSize(width: i32, height: i32) void {
     screenWidth = width;
     screenHeight = height;
     if (ecsInitialized) {
-        ecs.window.size.x = @intToFloat(f32, width);
-        ecs.window.size.y = @intToFloat(f32, height);
+        ecs.window.size.x = @as(f32, @floatFromInt(width));
+        ecs.window.size.y = @as(f32, @floatFromInt(height));
     }
 
     if (!windowsInitialized) {

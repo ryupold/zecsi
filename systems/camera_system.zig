@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const log = @import("../log.zig");
 const _ecs = @import("../ecs/ecs.v2.zig");
-const r = @import("../raylib/raylib.zig");
+const r = @import("raylib");
 const ECS = _ecs.ECS;
 const EntityID = _ecs.EntityID;
 const vouch = @import("../utils.zig").vouch;
@@ -109,7 +109,7 @@ pub const CameraSystem = struct {
         };
         if (wheelMove != 0) {
             if (self.ecs.getPtr(self.camera, CameraScrollZoom)) |onScroll| {
-                const shiftFactor = if(r.IsKeyDown(.KEY_LEFT_SHIFT) or r.IsKeyDown(.KEY_RIGHT_SHIFT)) onScroll.shiftFactor else 1;
+                const shiftFactor = if (r.IsKeyDown(.KEY_LEFT_SHIFT) or r.IsKeyDown(.KEY_RIGHT_SHIFT)) onScroll.shiftFactor else 1;
                 cam.zoom = std.math.clamp((cam.zoom + wheelMove * onScroll.factor * shiftFactor * cam.zoom), onScroll.minScroll, onScroll.maxScroll);
             }
         }

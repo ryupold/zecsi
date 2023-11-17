@@ -4,7 +4,7 @@ const fmt = std.fmt;
 const game = @import("./game.zig");
 const log = @import("./log.zig");
 
-const r = @import("raylib/raylib.zig");
+const r = @import("raylib");
 const ZecsiAllocator = @import("allocator.zig").ZecsiAllocator;
 
 var zalloc = ZecsiAllocator{};
@@ -28,7 +28,7 @@ pub fn main() anyerror!void {
 
     r.SetConfigFlags(.FLAG_WINDOW_RESIZABLE);
     var frame: usize = 0;
-    var lastWindowSize : struct { w: u32 = 0, h: u32 = 0 } = .{};
+    var lastWindowSize: struct { w: u32 = 0, h: u32 = 0 } = .{};
 
     // game start/stop
     log.info("starting game...", .{});
@@ -42,11 +42,11 @@ pub fn main() anyerror!void {
 
     while (!r.WindowShouldClose()) {
         if (frame % updateWindowSizeEveryNthFrame == 0) {
-            const newW = @intCast(u32, r.GetScreenWidth());
-            const newH = @intCast(u32, r.GetScreenHeight());
+            const newW = @as(u32, @intCast(r.GetScreenWidth()));
+            const newH = @as(u32, @intCast(r.GetScreenHeight()));
             if (newW != lastWindowSize.w or newH != lastWindowSize.h) {
-                log.debug("changed screen size {d}x{x}", .{newW, newH});
-                game.setWindowSize(@intCast(usize, newW), @intCast(usize, newH));
+                log.debug("changed screen size {d}x{x}", .{ newW, newH });
+                game.setWindowSize(@as(usize, @intCast(newW)), @as(usize, @intCast(newH)));
                 lastWindowSize.w = newW;
                 lastWindowSize.h = newH;
             }

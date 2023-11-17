@@ -310,11 +310,11 @@ pub const ECS = struct {
         }
         for (self.systems.items) |sys| {
             if (std.mem.eql(u8, @typeName(TSystem), sys.name))
-                return @intToPtr(*TSystem, sys.ptr);
+                return @as(*TSystem, @ptrFromInt(sys.ptr));
         }
         for (self.addedSystems.items) |sys| {
             if (std.mem.eql(u8, @typeName(TSystem), sys.name))
-                return @intToPtr(*TSystem, sys.ptr);
+                return @as(*TSystem, @ptrFromInt(sys.ptr));
         }
 
         return null;
@@ -419,41 +419,41 @@ pub const ECS = struct {
             const hasUI = std.meta.trait.hasFn("ui")(TSystem);
 
             pub fn initImpl(ecs: *ECS, ptr: usize) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 this.* = try TSystem.init(ecs);
             }
 
             pub fn deinitImpl(ptr: usize) void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 this.deinit();
                 this.ecs.allocator.destroy(this);
             }
 
             pub fn loadImpl(ptr: usize) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasLoad) try this.load();
             }
 
             pub fn beforeImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasBefore) try this.before(dt);
             }
             pub fn updateImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasUpdate) try this.update(dt);
             }
             pub fn afterImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasAfter) try this.after(dt);
             }
             pub fn uiImpl(ptr: usize, dt: f32) !void {
-                const this = @intToPtr(*TSystem, ptr);
+                const this = @as(*TSystem, @ptrFromInt(ptr));
                 if (hasUI) try this.ui(dt);
             }
         };
 
         const sys = System{
-            .ptr = @ptrToInt(system),
+            .ptr = @intFromPtr(system),
             .name = @typeName(TSystem),
             .alignment = @alignOf(TSystem),
             .initFn = gen.initImpl,

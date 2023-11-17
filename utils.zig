@@ -1,5 +1,5 @@
 const std = @import("std");
-const raylib = @import("raylib/raylib.zig");
+const raylib = @import("raylib");
 
 pub const Timer = struct {
     timePassed: f32 = 0,

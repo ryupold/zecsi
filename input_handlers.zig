@@ -1,5 +1,5 @@
 const std = @import("std");
-const raylib = @import("raylib/raylib.zig");
+const raylib = @import("raylib");
 
 /// detects mouse press and drag to draw a line
 /// alternatively detects a single touch point
@@ -25,7 +25,7 @@ pub const PointerDragger = struct {
             self.current = self.down;
             self.up = null;
         }
-        
+
         if (self._lastTouchCount == 0 and touchCount == 1) {
             self.down = raylib.GetTouchPosition(0);
             self.current = self.down;
