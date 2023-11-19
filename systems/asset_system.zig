@@ -38,6 +38,8 @@ pub const AssetSystem = struct {
         }
 
         self.assets.deinit();
+
+        AssetLink.static(self.ecs.allocator).deinit();
     }
 
     pub fn get(self: *Self, path: [:0]const u8) ?*AssetLink {
@@ -74,7 +76,7 @@ pub const AssetSystem = struct {
 
     fn cacheAssetLink(self: *Self, path: [:0]const u8, asset: assets.Asset) !*AssetLink {
         const ptr = try self.ecs.allocator.create(AssetLink);
-        ptr.* = try AssetLink.init(path, asset);
+        ptr.* = try AssetLink.init(self.ecs.allocator, path, asset);
         try self.assets.put(path, ptr);
         return ptr;
     }
@@ -88,9 +90,9 @@ pub const AssetSystem = struct {
     pub fn loadJsonObjectOrDefault(self: *Self, path: [:0]const u8, default: anytype) assets.JsonObject(@TypeOf(default)) {
         const T = @TypeOf(default);
         const json = self.loadJson(path) catch {
-            return assets.JsonObject(T).initStatic(default);
+            return assets.JsonObject(T).initStatic(self.ecs.allocator, default) catch unreachable;
         };
-        return assets.JsonObject(T).initOrDefault(json, default);
+        return assets.JsonObject(T).initOrDefault(json, default) catch unreachable;
     }
 
     pub fn unload(self: *Self, asset: *AssetLink) void {

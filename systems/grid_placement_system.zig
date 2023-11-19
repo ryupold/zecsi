@@ -149,7 +149,9 @@ pub const GridPlacementSystem = struct {
         };
     }
 
-    pub fn deinit(_: *@This()) void {}
+    pub fn deinit(self: *@This()) void {
+        self.config.deinit();
+    }
 
     pub fn update(self: *@This(), dt: f32) !void {
         if (r.IsKeyReleased(.KEY_G)) {

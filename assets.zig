@@ -137,19 +137,15 @@ pub const AnimatedTextureAtlas = struct {
     }
 };
 
-const JsonError = error{ FileNotFound, UnexpectedEndOfJson, InvalidJson };
-
 ///dont use Json directly. Instead get a 'JsonObject(T)' for easier usage
 pub const Json = struct {
     data: []const u8,
 
-    /// loads and validates a json string from file
+    /// loads a json string from file
     /// use 'deinit' to unload the data (reload does that automatically)
-    pub fn load(path: [:0]const u8) JsonError!@This() {
+    pub fn load(path: [:0]const u8) !@This() {
         const data = try r.LoadFileData(path);
         if (data.len == 0) return error.UnexpectedEndOfJson;
-
-        if (!std.json.validate(data)) return error.InvalidJson;
 
         return @This(){ .data = data };
     }
@@ -159,30 +155,23 @@ pub const Json = struct {
         self.data = undefined;
     }
 
-    pub fn reload(self: *@This(), path: [:0]const u8) JsonError!void {
+    pub fn reload(self: *@This(), path: [:0]const u8) !void {
         self.deinit();
         self.* = try @This().load(path);
     }
 
-    pub fn parse(self: @This(), comptime T: type, allocator: std.mem.Allocator) !std.json.Parsed(T) {
+    pub fn parse(self: @This(), comptime T: type, allocator: std.mem.Allocator) !Parsed(T) {
         return try std.json.parseFromSlice(T, allocator, self.data, .{
             .ignore_unknown_fields = true,
             .duplicate_field_behavior = .use_last,
         });
     }
-
-    pub fn free(comptime T: type, obj: std.json.Parsed(T), allocator: ?std.mem.Allocator) void {
-        std.json.parseFree(@TypeOf(obj), obj, .{
-            .allocator = allocator,
-            .duplicate_field_behavior = .UseLast,
-            .ignore_unknown_fields = true,
-        });
-    }
 };
 
+const Parsed = std.json.Parsed;
 pub fn JsonObject(comptime T: type) type {
     return struct {
-        object: T = undefined,
+        object: Parsed(T) = undefined,
         json: *AssetLink,
         static: bool = false,
         modTime: i128 = 0,
@@ -190,16 +179,22 @@ pub fn JsonObject(comptime T: type) type {
         pub fn init(json: *AssetLink) !@This() {
             return @This(){
                 .json = json,
-                .object = try json.asset.Json.parse(T, null),
+                .object = try json.asset.Json.parse(T, json.allocator),
             };
         }
 
-        pub fn initOrDefault(json: *AssetLink, default: T) @This() {
-            const obj = json.asset.Json.parse(T, null) catch |err| {
+        pub fn initOrDefault(json: *AssetLink, default: T) !@This() {
+            const obj = json.asset.Json.parse(T, json.allocator) catch |err| {
                 log.err("cannot load {s}: {?}\nusing default value instead", .{ json.path, err });
+                const tmp = try std.json.stringifyAlloc(json.allocator, default, .{});
+                defer json.allocator.free(tmp);
+
                 return @This(){
                     .json = json,
-                    .object = default,
+                    .object = try std.json.parseFromSlice(T, json.allocator, tmp, .{
+                        .ignore_unknown_fields = true,
+                        .duplicate_field_behavior = .use_last,
+                    }),
                     .static = true,
                 };
             };
@@ -209,28 +204,38 @@ pub fn JsonObject(comptime T: type) type {
             };
         }
 
-        pub fn initStatic(default: T) @This() {
+        pub fn initStatic(allocator: std.mem.Allocator, default: T) !@This() {
+            const tmp = try std.json.stringifyAlloc(allocator, default, .{});
+            defer allocator.free(tmp);
+
             return @This(){
-                .object = default,
+                .object = try std.json.parseFromSlice(T, allocator, tmp, .{
+                    .ignore_unknown_fields = true,
+                    .duplicate_field_behavior = .use_last,
+                }),
                 .static = true,
-                .json = undefined,
+                .json = AssetLink.static(allocator),
             };
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.object.deinit();
         }
 
         pub fn get(self: *@This()) T {
             if (builtin.mode != .Debug or self.static) {
-                return self.object; //no asset reloading in release mode
+                return self.object.value; //no asset reloading in release mode
             }
 
             if (self.modTime != self.json.loadedModTime) {
-                std.json.parseFree(T, self.object, .{});
-                self.object = self.json.asset.Json.parse(T, null) catch |err| {
+                self.object.deinit();
+                self.object = self.json.asset.Json.parse(T, self.json.allocator) catch |err| {
                     log.err("cannot load {s}: {?}", .{ self.json.path, err });
-                    return self.object;
+                    return std.mem.zeroes(T);
                 };
                 self.modTime = self.json.loadedModTime;
             }
-            return self.object;
+            return self.object.value;
         }
     };
 }
@@ -239,16 +244,19 @@ pub const Asset = union(enum) {
     Texture2D: r.Texture2D,
     TextureAtlas: TextureAtlas,
     Json: Json,
+    Static: void,
 };
 
 pub const AssetLink = struct {
+    allocator: std.mem.Allocator,
     path: [:0]const u8,
     asset: Asset,
     loadedModTime: i128 = 0,
     currentModTime: i128 = 0,
 
-    pub fn init(path: [:0]const u8, asset: Asset) !@This() {
+    pub fn init(allocator: std.mem.Allocator, path: [:0]const u8, asset: Asset) !@This() {
         var this: @This() = .{
+            .allocator = allocator,
             .path = path,
             .asset = asset,
             .loadedModTime = std.time.nanoTimestamp(),
@@ -259,7 +267,27 @@ pub const AssetLink = struct {
         return this;
     }
 
+    var _static: ?*@This() = null;
+    /// TODO: remove?
+    pub fn static(allocator: std.mem.Allocator) *@This() {
+        if (_static) |s| {
+            return s;
+        }
+        _static = allocator.create(@This()) catch unreachable;
+        _static.?.* = @This(){
+            .allocator = allocator,
+            .path = "",
+            .asset = .{ .Static = {} },
+            .loadedModTime = std.time.nanoTimestamp(),
+        };
+        return _static.?;
+    }
+
     pub fn deinit(self: *@This()) void {
+        defer if (self == _static) {
+            self.allocator.destroy(_static.?);
+            _static = null;
+        };
         defer self.asset = undefined;
         switch (self.asset) {
             .Texture2D => {
@@ -271,11 +299,15 @@ pub const AssetLink = struct {
             .Json => {
                 self.asset.Json.deinit();
             },
+            .Static => {},
         }
     }
 
     /// returns true if the asset file was updated
     pub fn hasChanged(self: @This()) bool {
+        if (self.asset == .Static) {
+            return false;
+        }
         return self.loadedModTime != self.currentModTime;
     }
 
@@ -294,6 +326,7 @@ pub const AssetLink = struct {
             .Json => {
                 try self.asset.Json.reload(self.path);
             },
+            .Static => {},
         }
         self.loadedModTime = self.currentModTime;
         return true;
@@ -302,6 +335,9 @@ pub const AssetLink = struct {
     /// check mod time of the file with 'std.fs.File.stat()'
     /// update self.currentModTime
     pub fn check(self: *@This()) !bool {
+        if (self.asset == .Static) {
+            return false;
+        }
         //this makes no sense in webassembly
         if (builtin.os.tag != .wasi and builtin.os.tag != .emscripten) {
             const cwd = std.fs.cwd();
