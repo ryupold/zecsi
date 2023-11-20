@@ -29,7 +29,7 @@ fn safeMain() !c_int {
     const allocator = zalloc.allocator();
     try log.infoAlloc(allocator, "starting da game  ...", .{});
 
-    try game.start(allocator, .{.cwd = ""});
+    try game.start(allocator, .{ .cwd = "" });
     defer game.stop(allocator);
 
     emsdk.emscripten_set_main_loop(gameLoop, 0, 1);

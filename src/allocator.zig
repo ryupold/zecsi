@@ -50,7 +50,7 @@ const EmscriptenAllocator = switch (builtin.os.tag) {
     .emscripten, .wasi => struct {
         const c = @cImport({
             @cDefine("__EMSCRIPTEN__", "1");
-            @cInclude("raylib/emscripten/emscripten.h");
+            @cInclude("emscripten/emscripten.h");
             @cInclude("stdlib.h");
         });
 

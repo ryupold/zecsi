@@ -75,7 +75,7 @@ fn getPrintFn(comptime logLevel: LogLevel) fn ([:0]u8) void {
 fn emscriptenPrint(comptime logLevel: LogLevel) fn ([:0]u8) void {
     const emsdk = @cImport({
         @cDefine("__EMSCRIPTEN__", "1");
-        @cInclude("raylib/emscripten/emscripten.h");
+        @cInclude("emscripten/emscripten.h");
     });
     return (struct {
         pub fn print(s: [:0]u8) void {
