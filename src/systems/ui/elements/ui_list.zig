@@ -62,7 +62,7 @@ pub fn uiList(
             .width = rect.width,
             .height = spacePerCell.y,
         };
-        var str = try options.toString(allocator, i, element);
+        const str = try options.toString(allocator, i, element);
         defaultTrimOverflow(str, .{
             .rect = cellRect,
             .fontSize = options.fontSize,

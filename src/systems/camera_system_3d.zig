@@ -20,8 +20,8 @@ pub const CameraSystem3D = struct {
     camRef: Component,
 
     pub fn init(ecs: *ECS) !Self {
-        var cam = try ecs.createWithCapacity(5);
-        var system = Self{
+        const cam = try ecs.createWithCapacity(5);
+        const system = Self{
             .ecs = ecs,
             .camera = cam.id,
             .camRef = try ecs.add(cam, r.Camera3D{
@@ -61,7 +61,7 @@ pub const CameraSystem3D = struct {
         offset: r.Vector3 = .{},
     }) r.Vector3 {
         if (self.ecs.getPtr(r.Camera3D, self.camRef)) |cam| {
-            var ray = r.GetMouseRay(screenPos, cam);
+            const ray = r.GetMouseRay(screenPos, cam);
             const v = r.Vector2{ .x = config.extend, .z = config.extend };
             const collision = r.GetRayCollisionQuad(
                 ray,

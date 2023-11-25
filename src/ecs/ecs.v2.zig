@@ -97,7 +97,7 @@ pub const ECS = struct {
 
         const info = @typeInfo(@TypeOf(components));
 
-        var entity = try this.create();
+        const entity = try this.create();
         //TODO: optimize: put data directly into correct archetype
         inline for (info.Struct.fields, 0..) |_, i| {
             try this.put(entity, components[i]);
@@ -108,7 +108,7 @@ pub const ECS = struct {
     /// destroy entity (after `syncEntities`)
     pub fn destroy(this: *@This(), entity: EntityID) !void {
         if (this.entities.get(entity)) |hash| {
-            var anyStorage = this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash);
+            const anyStorage = this.archetypes.getPtr(hash) orelse this.addedArchetypes.getPtr(hash);
             if (anyStorage) |aStorage| {
                 try aStorage.delete(entity);
             }
@@ -172,7 +172,7 @@ pub const ECS = struct {
     /// otherwise override current component value (instant)
     pub fn put(this: *@This(), entity: EntityID, component: anytype) !void {
         if (this.entities.get(entity)) |oldHash| {
-            var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
+            const previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
             if (previousStorage) |oldStorage| {
                 oldStorage.put(entity, component) catch |err|
                     switch (err) {
@@ -213,7 +213,7 @@ pub const ECS = struct {
     /// remove component of type `TComponent` from `entity`
     pub fn remove(this: *@This(), entity: EntityID, comptime TComponent: type) !bool {
         if (this.entities.get(entity)) |oldHash| {
-            var previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
+            const previousStorage = this.archetypes.getPtr(oldHash) orelse this.addedArchetypes.getPtr(oldHash);
             if (previousStorage) |oldStorage| {
                 if (!oldStorage.has(TComponent)) return false;
 
@@ -330,7 +330,7 @@ pub const ECS = struct {
         if (self.getSystem(TSystem)) |alreadyRegistered| {
             alreadyRegistered.* = system.*;
         } else {
-            var s = try self.allocSystem(TSystem);
+            const s = try self.allocSystem(TSystem);
             try self.systems.append(s.ref);
             s.system.* = system.*;
         }
@@ -407,16 +407,15 @@ pub const ECS = struct {
 
     /// Allocate a new system instance and return it with its VTable (not added to system list yet)
     fn allocSystem(self: *@This(), comptime TSystem: type) !AllocSystemResult(TSystem) {
-        var system: *TSystem = try self.allocator.create(TSystem);
+        const system: *TSystem = try self.allocator.create(TSystem);
         errdefer self.allocator.destroy(system);
-        // system.* = try TSystem.init(self);
 
         const gen = struct {
-            const hasLoad = std.meta.trait.hasFn("load")(TSystem);
-            const hasBefore = std.meta.trait.hasFn("before")(TSystem);
-            const hasUpdate = std.meta.trait.hasFn("update")(TSystem);
-            const hasAfter = std.meta.trait.hasFn("after")(TSystem);
-            const hasUI = std.meta.trait.hasFn("ui")(TSystem);
+            const hasLoad = std.meta.hasFn(TSystem, "load");
+            const hasBefore = std.meta.hasFn(TSystem, "before");
+            const hasUpdate = std.meta.hasFn(TSystem, "update");
+            const hasAfter = std.meta.hasFn(TSystem, "after");
+            const hasUI = std.meta.hasFn(TSystem, "ui");
 
             pub fn initImpl(ecs: *ECS, ptr: usize) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
@@ -458,11 +457,11 @@ pub const ECS = struct {
             .alignment = @alignOf(TSystem),
             .initFn = gen.initImpl,
             .deinitFn = gen.deinitImpl,
-            .loadFn = if (std.meta.trait.hasFn("load")(TSystem)) gen.loadImpl else null,
-            .beforeFn = if (std.meta.trait.hasFn("before")(TSystem)) gen.beforeImpl else null,
-            .updateFn = if (std.meta.trait.hasFn("update")(TSystem)) gen.updateImpl else null,
-            .afterFn = if (std.meta.trait.hasFn("after")(TSystem)) gen.afterImpl else null,
-            .uiFn = if (std.meta.trait.hasFn("ui")(TSystem)) gen.uiImpl else null,
+            .loadFn = if (std.meta.hasFn(TSystem, "load")) gen.loadImpl else null,
+            .beforeFn = if (std.meta.hasFn(TSystem, "before")) gen.beforeImpl else null,
+            .updateFn = if (std.meta.hasFn(TSystem, "update")) gen.updateImpl else null,
+            .afterFn = if (std.meta.hasFn(TSystem, "after")) gen.afterImpl else null,
+            .uiFn = if (std.meta.hasFn(TSystem, "ui")) gen.uiImpl else null,
         };
 
         return AllocSystemResult(TSystem){
@@ -877,7 +876,7 @@ test "ECS.update calls before on all systems, then update on all systems and at 
         }
     };
 
-    var sut = try ecs.registerSystem(UpdateSystem);
+    const sut = try ecs.registerSystem(UpdateSystem);
     try expectEqual(sut.beforeCalls, 0);
     try expectEqual(sut.updateCalls, 0);
     try expectEqual(sut.afterCalls, 0);

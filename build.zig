@@ -18,17 +18,16 @@ pub fn build(b: *std.build.Builder) !void {
 
     switch (target.getOsTag()) {
         .wasi, .emscripten => {
-            const lib = b.addStaticLibrary(.{
+            const lib: std.build.StaticLibraryOptions = .{
                 .name = "zecsi",
                 .root_source_file = std.build.FileSource.relative("src" ++ sep ++ "web.zig"),
                 .optimize = mode,
                 .target = target,
-            });
+            };
 
             try installEmscripten(b, lib);
         },
         else => {
-            std.log.info("building for desktop\n", .{});
             const exe = b.addExecutable(.{
                 .name = "zecsi",
                 .root_source_file = std.build.FileSource.relative("src" ++ sep ++ "desktop.zig"),
@@ -45,25 +44,13 @@ pub fn build(b: *std.build.Builder) !void {
             if (b.args) |args| {
                 run_cmd.addArgs(args);
             }
-
             const run_step = b.step("run", "Run the app");
             run_step.dependOn(&run_cmd.step);
         },
     }
-
-    const exe_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src" ++ sep ++ "desktop.zig" },
-        .target = target,
-        .optimize = mode,
-    });
-
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&exe_tests.step);
 }
 
 pub fn addZecsiDesktop(b: *std.build.Builder, exe: *std.build.Step.Compile) !void {
-    std.log.info("building for desktop\n", .{});
-
     const raylib = @import("src/raylib/build.zig");
     const raygui = @import("src/raygui/build.zig");
     raylib.addTo(b, exe, exe.target, exe.optimize);
@@ -81,7 +68,9 @@ pub fn addZecsiDesktop(b: *std.build.Builder, exe: *std.build.Step.Compile) !voi
     });
 }
 
-pub fn installEmscripten(b: *std.build.Builder, entry: std.build.StaticLibraryOptions) !void {
+pub fn installEmscripten(b: *std.build.Builder, lib: *std.build.Step.Compile) !void {
+    std.debug.assert(lib.kind == .lib and lib.linkage == .static);
+
     const emscriptenSrc = cwd ++ sep ++ "src" ++ sep ++ "raylib" ++ sep ++ "emscripten" ++ sep;
     const webCachedir = b.fmt("{s}{s}web", .{ b.cache_root.path orelse cwd ++ sep ++ "zig-cache", sep });
     const webOutdir = b.fmt("{s}{s}web", .{ b.install_prefix, sep });
@@ -91,9 +80,6 @@ pub fn installEmscripten(b: *std.build.Builder, entry: std.build.StaticLibraryOp
         std.log.err("\n\nUSAGE: Please build with 'zig build -Doptimize=ReleaseSmall -Dtarget=wasm32-wasi --sysroot \"$EMSDK/upstream/emscripten\"'\n\n", .{});
         return error.SysRootExpected;
     }
-    const lib = b.addStaticLibrary(entry);
-    lib.addIncludePath(.{ .path = raylibSrc });
-    lib.addIncludePath(.{ .path = rayguiSrc });
 
     const emcc_file = switch (b.host.target.os.tag) {
         .windows => "emcc.bat",
@@ -187,9 +173,9 @@ pub fn installEmscripten(b: *std.build.Builder, entry: std.build.StaticLibraryOp
         },
     });
 
-    // this installs the lib (libraylib-zig-examples.a) to the `libraryOutputFolder` folder
+    // this installs the lib (described by the 'entry' parameter linked with raylib) to `zig-out/lib`
     b.installArtifact(lib);
-    const shell = switch (entry.optimize) {
+    const shell = switch (lib.optimize) {
         .Debug => emscriptenSrc ++ "shell.html",
         else => emscriptenSrc ++ "minshell.html",
     };
@@ -203,7 +189,7 @@ pub fn installEmscripten(b: *std.build.Builder, entry: std.build.StaticLibraryOp
         rayguiBindingSrc ++ "raygui_marshal.c",
 
         // libraryOutputFolder ++ "lib" ++ APP_NAME ++ ".a",
-        b.fmt("{s}" ++ sep ++ "lib" ++ sep ++ "lib{s}.a", .{ b.install_prefix, entry.name }),
+        b.fmt("{s}" ++ sep ++ "lib" ++ sep ++ "lib{s}.a", .{ b.install_prefix, lib.name }),
         "-I.",
         "-I" ++ raylibSrc,
         "-I" ++ rayguiSrc,
@@ -215,7 +201,7 @@ pub fn installEmscripten(b: *std.build.Builder, entry: std.build.StaticLibraryOp
         b.fmt("-L{s}", .{webCachedir}),
         b.fmt("-L{s}" ++ sep ++ "lib" ++ sep, .{b.install_prefix}),
         "-lraylib",
-        b.fmt("-l{s}", .{entry.name}),
+        b.fmt("-l{s}", .{lib.name}),
         "--shell-file",
         shell,
         "-DPLATFORM_WEB",

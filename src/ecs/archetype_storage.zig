@@ -25,7 +25,7 @@ const ArchetypeColumn = struct {
 
     /// create a column for components of type `TComponent`
     pub fn init(allocator: std.mem.Allocator, comptime TComponent: type) !@This() {
-        var columnPtr = try allocator.create(std.ArrayList(TComponent));
+        const columnPtr = try allocator.create(std.ArrayList(TComponent));
         columnPtr.* = std.ArrayList(TComponent).init(allocator);
 
         return @This(){
@@ -42,7 +42,7 @@ const ArchetypeColumn = struct {
             }).append,
             ._copyFrom = &(struct {
                 fn copyFrom(column: *ArchetypeColumn, from: *ArchetypeColumn, fromIndex: usize) (std.mem.Allocator.Error || error{WrongComponentType})!usize {
-                    var fromList = try from.cast(TComponent);
+                    const fromList = try from.cast(TComponent);
                     try column.append(fromList.items[fromIndex]);
                     return column.len - 1;
                 }
@@ -109,7 +109,7 @@ const ArchetypeColumn = struct {
 
     /// get a copy of component at `index`
     pub fn get(this: *@This(), comptime TComponent: type, index: usize) !TComponent {
-        var list = try this.cast(TComponent);
+        const list = try this.cast(TComponent);
         return list.items[index];
     }
 
@@ -154,9 +154,9 @@ pub const ArchetypeStorage = struct {
 
     /// create a new storage without any columns
     pub fn init(allocator: std.mem.Allocator) !@This() {
-        var data = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
-        var addedData = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
-        var removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator);
+        const data = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
+        const addedData = std.AutoArrayHashMap(ComponentType, ArchetypeColumn).init(allocator);
+        const removedEntities = std.AutoArrayHashMap(EntityID, void).init(allocator);
 
         return @This(){
             .allocator = allocator,
@@ -313,7 +313,7 @@ pub const ArchetypeStorage = struct {
     /// this is a guaranteed valid reference until the next call to `sync`
     pub fn slice(this: *@This(), comptime TComponent: type) error{ComponentNotPartOfArchetype}![]TComponent {
         if (this.data.getPtr(typeId(TComponent))) |columnPtr| {
-            var column = columnPtr.cast(TComponent) catch unreachable;
+            const column = columnPtr.cast(TComponent) catch unreachable;
             return column.items;
         }
         return error.ComponentNotPartOfArchetype;
@@ -328,7 +328,7 @@ pub const ArchetypeStorage = struct {
         const index = this.addedEntityIDs.items.len;
 
         var data: std.AutoArrayHashMap(ComponentType, ArchetypeColumn) = undefined;
-        var oldIndex: usize = getIndex: {
+        const oldIndex: usize = getIndex: {
             if (oldStorage.entityIndexMap.get(entity)) |i| {
                 data = oldStorage.data;
                 break :getIndex i;
@@ -769,7 +769,7 @@ test "ArchetypeStorage query (ArchetypeSlices)" {
     allComponents.data.position[1] = .{ .x = 111, .y = 222 };
 
     // query subset of components
-    var positions = try testArch.query(.{.{ "position", Position }});
+    const positions = try testArch.query(.{.{ "position", Position }});
     try expectEqual(Position{ .x = 111, .y = 222 }, positions.data.position[1]);
 
     // query component that is not present in archetype
@@ -854,8 +854,9 @@ pub fn archetypeHash(arch: anytype) ArchetypeHash {
 
     const ty = @TypeOf(arch);
     const tyInfo = @typeInfo(ty);
-    comptime if (!meta.trait.isTuple(ty)) {
-        compError("expected tuple of types but got {?}", .{arch});
+
+    comptime if (tyInfo != .Struct or !tyInfo.Struct.is_tuple) {
+        compError("1) expected tuple of types but got {?}", .{arch});
     };
 
     if (arch.len == 0) {
@@ -864,7 +865,7 @@ pub fn archetypeHash(arch: anytype) ArchetypeHash {
 
     inline for (tyInfo.Struct.fields) |field| {
         if (@TypeOf(field.type) != type) {
-            compError("expected tuple of types but got {?}", .{arch});
+            compError("2) expected tuple of types but got {?}", .{arch});
         }
     }
 
@@ -972,12 +973,14 @@ pub fn ArchetypeEntry(comptime arch: anytype) type {
     @setEvalBranchQuota(10_000);
     const ty = @TypeOf(arch);
     const tyInfo = @typeInfo(ty);
-    comptime if (!meta.trait.isTuple(ty)) {
+    comptime if (tyInfo != .Struct or !tyInfo.Struct.is_tuple) {
         compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
     };
 
     inline for (tyInfo.Struct.fields, 0..) |field, i| {
-        comptime if (!meta.trait.isTuple(field.type)) {
+        const fieldInfo = @typeInfo(field.type);
+
+        comptime if (fieldInfo != .Struct or !fieldInfo.Struct.is_tuple) {
             compError("expected tuple of tuples of {{[]const u8, type}} but got {?}", .{arch});
         };
         comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {
@@ -1031,12 +1034,13 @@ pub fn ArchetypeSlices(comptime arch: anytype) type {
     @setEvalBranchQuota(10_000);
     const ty = @TypeOf(arch);
     const tyInfo = @typeInfo(ty);
-    comptime if (!meta.trait.isTuple(ty)) {
+    comptime if (tyInfo != .Struct or !tyInfo.Struct.is_tuple) {
         compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
     };
 
     inline for (tyInfo.Struct.fields, 0..) |field, i| {
-        comptime if (!meta.trait.isTuple(field.type)) {
+        const fieldInfo = @typeInfo(field.type);
+        comptime if (fieldInfo != .Struct or !fieldInfo.Struct.is_tuple) {
             compError("expected tuple of tuples of {{[]const u8, type}} but got {any}", .{ty});
         };
         comptime if (arch[i].len != 2 or @TypeOf(arch[i][1]) != type) {

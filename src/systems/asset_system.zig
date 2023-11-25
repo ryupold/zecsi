@@ -19,7 +19,7 @@ pub const AssetSystem = struct {
     assets: std.StringHashMap(*AssetLink),
 
     pub fn init(ecs: *ECS) !Self {
-        var system = Self{
+        const system = Self{
             .ecs = ecs,
             .assets = std.StringHashMap(*AssetLink).init(ecs.allocator),
         };

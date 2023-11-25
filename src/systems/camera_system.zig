@@ -53,7 +53,7 @@ pub const CameraSystem = struct {
                 .y = ecs.window.size.y / 2,
             },
         });
-        var system = Self{
+        const system = Self{
             .ecs = ecs,
             .camera = cam,
         };
