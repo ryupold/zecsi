@@ -73,6 +73,31 @@ pub const ECS = struct {
         this.removedEntities.deinit();
     }
 
+    //=== Before, Update, After, UI ===============================================================
+
+    /// execution order: before0,before1,before2,update0,update1,update2,after2,after1,after0,ui0,ui1,ui2
+    pub fn update(self: *@This(), dt: f32) !void {
+        for (self.systems.items) |*system| {
+            try system.before(dt);
+        }
+        for (self.systems.items) |*system| {
+            try system.update(dt);
+        }
+
+        var i: usize = self.systems.items.len;
+        while (i > 0) : (i -= 1) {
+            try self.systems.items[i - 1].after(dt);
+        }
+
+        for (self.systems.items) |*system| {
+            try system.ui(dt);
+        }
+
+        try self.syncEntities();
+
+        try self.syncSystems();
+    }
+
     //=== Entity ==================================================================================
 
     /// create new entity without any components attached
@@ -410,13 +435,13 @@ pub const ECS = struct {
         const system: *TSystem = try self.allocator.create(TSystem);
         errdefer self.allocator.destroy(system);
 
-        const gen = struct {
-            const hasLoad = std.meta.hasFn(TSystem, "load");
-            const hasBefore = std.meta.hasFn(TSystem, "before");
-            const hasUpdate = std.meta.hasFn(TSystem, "update");
-            const hasAfter = std.meta.hasFn(TSystem, "after");
-            const hasUI = std.meta.hasFn(TSystem, "ui");
+        const hasLoad = std.meta.hasFn(TSystem, "load");
+        const hasBefore = std.meta.hasFn(TSystem, "before");
+        const hasUpdate = std.meta.hasFn(TSystem, "update");
+        const hasAfter = std.meta.hasFn(TSystem, "after");
+        const hasUI = std.meta.hasFn(TSystem, "ui");
 
+        const gen = struct {
             pub fn initImpl(ecs: *ECS, ptr: usize) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
                 this.* = try TSystem.init(ecs);
@@ -430,24 +455,26 @@ pub const ECS = struct {
 
             pub fn loadImpl(ptr: usize) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
-                if (hasLoad) try this.load();
+                if (hasLoad) try TSystem.load(this);
             }
 
             pub fn beforeImpl(ptr: usize, dt: f32) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
-                if (hasBefore) try this.before(dt);
+                if (hasBefore) try TSystem.before(this, dt);
             }
             pub fn updateImpl(ptr: usize, dt: f32) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
-                if (hasUpdate) try this.update(dt);
+                if (hasUpdate) {
+                    try TSystem.update(this, dt);
+                }
             }
             pub fn afterImpl(ptr: usize, dt: f32) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
-                if (hasAfter) try this.after(dt);
+                if (hasAfter) try TSystem.after(this, dt);
             }
             pub fn uiImpl(ptr: usize, dt: f32) !void {
                 const this = @as(*TSystem, @ptrFromInt(ptr));
-                if (hasUI) try this.ui(dt);
+                if (hasUI) try TSystem.ui(this, dt);
             }
         };
 
@@ -457,42 +484,17 @@ pub const ECS = struct {
             .alignment = @alignOf(TSystem),
             .initFn = gen.initImpl,
             .deinitFn = gen.deinitImpl,
-            .loadFn = if (std.meta.hasFn(TSystem, "load")) gen.loadImpl else null,
-            .beforeFn = if (std.meta.hasFn(TSystem, "before")) gen.beforeImpl else null,
-            .updateFn = if (std.meta.hasFn(TSystem, "update")) gen.updateImpl else null,
-            .afterFn = if (std.meta.hasFn(TSystem, "after")) gen.afterImpl else null,
-            .uiFn = if (std.meta.hasFn(TSystem, "ui")) gen.uiImpl else null,
+            .loadFn = if (hasLoad) gen.loadImpl else null,
+            .beforeFn = if (hasBefore) gen.beforeImpl else null,
+            .updateFn = if (hasUpdate) gen.updateImpl else null,
+            .afterFn = if (hasAfter) gen.afterImpl else null,
+            .uiFn = if (hasUI) gen.uiImpl else null,
         };
 
         return AllocSystemResult(TSystem){
             .ref = sys,
             .system = system,
         };
-    }
-
-    //=== Before, Update, After, UI ===============================================================
-
-    /// execution order: before0,before1,before2,update0,update1,update2,after2,after1,after0,ui0,ui1,ui2
-    pub fn update(self: *@This(), dt: f32) !void {
-        for (self.systems.items) |*system| {
-            try system.before(dt);
-        }
-        for (self.systems.items) |*system| {
-            try system.update(dt);
-        }
-
-        var i: usize = self.systems.items.len;
-        while (i > 0) : (i -= 1) {
-            try self.systems.items[i - 1].after(dt);
-        }
-
-        for (self.systems.items) |*system| {
-            try system.ui(dt);
-        }
-
-        try self.syncEntities();
-
-        try self.syncSystems();
     }
 };
 
@@ -583,23 +585,33 @@ const System = struct {
     }
 
     pub fn load(self: *@This()) !void {
-        if (self.loadFn) |loadFn| try @call(.auto, loadFn, .{self.ptr});
+        if (self.loadFn) |loadFn| {
+            try @call(.auto, loadFn, .{self.ptr});
+        }
     }
 
     pub fn before(self: *@This(), dt: f32) !void {
-        if (self.beforeFn) |beforeFn| try @call(.auto, beforeFn, .{ self.ptr, dt });
+        if (self.beforeFn) |beforeFn| {
+            try @call(.auto, beforeFn, .{ self.ptr, dt });
+        }
     }
 
     pub fn update(self: *@This(), dt: f32) !void {
-        if (self.updateFn) |updateFn| try @call(.auto, updateFn, .{ self.ptr, dt });
+        if (self.updateFn) |updateFn| {
+            try @call(.auto, updateFn, .{ self.ptr, dt });
+        }
     }
 
     pub fn after(self: *@This(), dt: f32) !void {
-        if (self.afterFn) |afterFn| try @call(.auto, afterFn, .{ self.ptr, dt });
+        if (self.afterFn) |afterFn| {
+            try @call(.auto, afterFn, .{ self.ptr, dt });
+        }
     }
 
     pub fn ui(self: *@This(), dt: f32) !void {
-        if (self.uiFn) |uiFn| try @call(.auto, uiFn, .{ self.ptr, dt });
+        if (self.uiFn) |uiFn| {
+            try @call(.auto, uiFn, .{ self.ptr, dt });
+        }
     }
 };
 
