@@ -13,13 +13,13 @@ pub fn get(allocator: std.mem.Allocator, key: []const u8) !?[]const u8 {
                 @cInclude("stdlib.h");
             });
             const cKey = try std.fmt.allocPrintZ(allocator, "{s}", .{key});
-            const cKeyPtr = @ptrToInt(cKey.ptr);
-            defer c.free(@intToPtr(*anyopaque, cKeyPtr));
-            const cValue = getItem(@ptrCast([*c]const u8, cKey));
+            const cKeyPtr = @intFromPtr(cKey.ptr);
+            defer c.free(@as(*anyopaque, @ptrFromInt(cKeyPtr)));
+            const cValue = getItem(@as([*c]const u8, @ptrCast(cKey)));
             if (cValue != null) {
                 const v = try allocator.dupe(u8, cValue[0..std.mem.len(cValue)]);
-                const cValuePtr = @ptrToInt(cValue);
-                c.free(@intToPtr(*anyopaque, cValuePtr));
+                const cValuePtr = @intFromPtr(cValue);
+                c.free(@as(*anyopaque, @ptrFromInt(cValuePtr)));
                 return v;
             }
             return null;
@@ -61,15 +61,15 @@ pub fn set(allocator: std.mem.Allocator, key: []const u8, value: []const u8) !vo
                 @cInclude("stdlib.h");
             });
             const cKey = try std.fmt.allocPrintZ(allocator, "{s}", .{key});
-            const cKeyPtr = @ptrToInt(cKey.ptr);
-            defer c.free(@intToPtr(*anyopaque, cKeyPtr));
+            const cKeyPtr = @intFromPtr(cKey.ptr);
+            defer c.free(@as(*anyopaque, @ptrFromInt(cKeyPtr)));
             const cValue = try std.fmt.allocPrintZ(allocator, "{s}", .{value});
-            const cValuePtr = @ptrToInt(cValue.ptr);
-            defer c.free(@intToPtr(*anyopaque, cValuePtr));
+            const cValuePtr = @intFromPtr(cValue.ptr);
+            defer c.free(@as(*anyopaque, @ptrFromInt(cValuePtr)));
 
             setItem(
-                @ptrCast([*c]const u8, cKey),
-                @ptrCast([*c]const u8, cValue),
+                @as([*c]const u8, @ptrCast(cKey)),
+                @as([*c]const u8, @ptrCast(cValue)),
             );
         },
         //desktop
@@ -90,7 +90,7 @@ pub fn set(allocator: std.mem.Allocator, key: []const u8, value: []const u8) !vo
             var file = try cwd.createFile("localStorage.json", .{});
             defer file.close();
 
-            var writer = std.io.Writer(std.fs.File, std.fs.File.WriteError, std.fs.File.write){
+            const writer = std.io.Writer(std.fs.File, std.fs.File.WriteError, std.fs.File.write){
                 .context = file,
             };
 
