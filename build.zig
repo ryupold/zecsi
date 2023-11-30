@@ -53,7 +53,7 @@ pub fn build(b: *std.build.Builder) !void {
 pub fn addZecsiDesktop(b: *std.build.Builder, exe: *std.build.Step.Compile) !void {
     const raylib = @import("src/raylib/build.zig");
     const raygui = @import("src/raygui/build.zig");
-    raylib.addTo(b, exe, exe.target, exe.optimize);
+    raylib.addTo(b, exe, exe.target, exe.optimize, .{});
     raygui.addTo(b, exe, exe.target, exe.optimize);
 
     raylib.linkSystemDependencies(exe);
