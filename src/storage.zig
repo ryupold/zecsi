@@ -32,14 +32,12 @@ pub fn get(allocator: std.mem.Allocator, key: []const u8) !?[]const u8 {
             };
             defer allocator.free(data);
 
-            var parser = std.json.Parser.init(allocator, false);
-            defer parser.deinit();
-            var map = try parser.parse(data);
+            const map = try std.json.parseFromSlice(std.json.Value, allocator, data, .{});
             defer map.deinit();
 
-            if (map.root.Object.get(key)) |v| {
+            if (map.value.object.get(key)) |v| {
                 std.debug.print("loaded data", .{});
-                return try allocator.dupe(u8, v.String);
+                return try allocator.dupe(u8, v.string);
             }
 
             return null;
@@ -80,12 +78,11 @@ pub fn set(allocator: std.mem.Allocator, key: []const u8, value: []const u8) !vo
             };
             defer allocator.free(data);
 
-            var parser = std.json.Parser.init(allocator, false);
-            defer parser.deinit();
-            var map = try parser.parse(data);
+            var map = try std.json.parseFromSlice(std.json.Value, allocator, data, .{});
             defer map.deinit();
 
-            try map.root.Object.put(key, .{ .String = value });
+            // FIXME: possible memory leak?
+            try map.value.object.put(key, .{ .string = value });
 
             var file = try cwd.createFile("localStorage.json", .{});
             defer file.close();
@@ -94,7 +91,8 @@ pub fn set(allocator: std.mem.Allocator, key: []const u8, value: []const u8) !vo
                 .context = file,
             };
 
-            try map.root.jsonStringify(.{}, writer);
+            // try map.value. jsonStringify(.{}, writer);
+            try std.json.stringify(map.value, .{}, writer);
 
             std.debug.print("safed data", .{});
         },

@@ -284,10 +284,6 @@ pub const AssetLink = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        defer if (self == _static) {
-            self.allocator.destroy(_static.?);
-            _static = null;
-        };
         defer self.asset = undefined;
         switch (self.asset) {
             .Texture2D => {
@@ -299,7 +295,12 @@ pub const AssetLink = struct {
             .Json => {
                 self.asset.Json.deinit();
             },
-            .Static => {},
+            .Static => {
+                if (self == _static) {
+                    self.allocator.destroy(_static.?);
+                    _static = null;
+                }
+            },
         }
     }
 

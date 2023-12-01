@@ -116,7 +116,7 @@ test "Timer" {
     var timer: Timer = .{ .time = 1.0, .repeat = true };
     try expect(!timer.tick(0.1));
     try expect(timer.tick(1));
-    try expectApproxEqAbs(timer.timePassed, 0.1, std.math.epsilon(f32));
+    try expectApproxEqAbs(timer.timePassed, 0.1, std.math.floatEps(f32));
     try expect(timer.tick(0.91));
     try expect(!timer.tick(0.1));
     try expect(!timer.tick(0.1));

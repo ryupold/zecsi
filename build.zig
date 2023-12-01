@@ -64,6 +64,7 @@ pub fn addZecsiDesktop(b: *std.build.Builder, exe: *std.build.Step.Compile) !voi
         },
         .dependencies = &.{
             .{ .name = "raylib", .module = exe.modules.get("raylib").? },
+            .{ .name = "raygui", .module = exe.modules.get("raygui").? },
         },
     });
 }
