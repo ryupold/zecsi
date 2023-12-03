@@ -44,7 +44,7 @@ pub fn ArrayTextInput(comptime maxLength: usize) type {
                         if (std.unicode.Utf8View.init(this.text())) |view| {
                             var it = view.iterator();
                             const cursorIndex: usize = it.peek(this.cursorPos).len;
-                            std.mem.copy(u8, this.data[cursorIndex..this.last], this.data[cursorIndex + byteCount .. this.last + byteCount]);
+                            std.mem.copyForwards(u8, this.data[cursorIndex..this.last], this.data[cursorIndex + byteCount .. this.last + byteCount]);
                         } else |err| {
                             std.debug.print("ui_text_input.zig: {?}\n", .{err});
                             continue;
