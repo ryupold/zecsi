@@ -25,6 +25,10 @@ const ArchetypeColumn = struct {
 
     /// create a column for components of type `TComponent`
     pub fn init(allocator: std.mem.Allocator, comptime TComponent: type) !@This() {
+        if (@typeInfo(TComponent) == .ErrorUnion) {
+            @compileError("TComponent cannot be a error union but was " ++ @typeName(TComponent));
+        }
+
         const columnPtr = try allocator.create(std.ArrayList(TComponent));
         columnPtr.* = std.ArrayList(TComponent).init(allocator);
 

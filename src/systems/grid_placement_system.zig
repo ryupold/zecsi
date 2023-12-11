@@ -7,8 +7,9 @@ const CameraSystem = camera.CameraSystem;
 const screenToWorld = camera.screenToWorld;
 const builtin = @import("builtin");
 const AssetSystem = @import("asset_system.zig").AssetSystem;
-const AssetLink = @import("../assets.zig").AssetLink;
-const JsonObject = @import("../assets.zig").JsonObject;
+const assets = @import("../assets.zig");
+const AssetLink = assets.AssetLink;
+const Json = @import("../assets.zig").Json;
 
 pub const Vector2 = r.Vector2;
 
@@ -138,19 +139,19 @@ pub const GridPlacementSystem = struct {
     ecs: *ECS,
     isGridVisible: bool = builtin.mode == .Debug,
     cameraSystem: ?*CameraSystem = null,
-    config: JsonObject(GridConfig),
+    config: *Json(GridConfig),
 
     pub fn init(ecs: *ECS) !@This() {
         const ass = ecs.getSystem(AssetSystem).?;
-        const defaultConfig = GridConfig{ .cellSize = 64 };
+
         return @This(){
             .ecs = ecs,
-            .config = ass.loadJsonObjectOrDefault("assets/data/grid_config.json", defaultConfig),
+            .config = ass.loadJsonFromFile(GridConfig, "assets/data/grid_config.json") catch try assets.Json(GridConfig).initConst(ecs.allocator, GridConfig{ .cellSize = 64 }),
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        self.config.deinit();
+        self.config.deinit(self.ecs.allocator);
     }
 
     pub fn update(self: *@This(), dt: f32) !void {
@@ -214,7 +215,7 @@ pub const GridPlacementSystem = struct {
     }
 
     pub fn cellSize(self: *@This()) f32 {
-        const config = self.config.get();
+        const config = self.config.value();
         return config.cellSize;
     }
 
